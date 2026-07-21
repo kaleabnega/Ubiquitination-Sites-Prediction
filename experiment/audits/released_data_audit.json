@@ -1,0 +1,84 @@
+{
+  "artifacts": {
+    "Negative_10_percent_independent_test_set_DeepUBI.fasta": {
+      "bytes": 481693,
+      "sha256": "659dad50721cacce097b174c41c05517ca064faf54defa21f8722649ce2ab2da"
+    },
+    "Negative_90_percent_training_set_DeepUBI.fasta": {
+      "bytes": 4336100,
+      "sha256": "fc7ffe569ce9921df5653dd149eb0bda0c34b3943fc02e75afedb7cb5cebf13d"
+    },
+    "Positive_10_percent_independent_test_set_DeepUBI.fasta": {
+      "bytes": 726805,
+      "sha256": "c6a5107096fa0a60581a7e81e622ef1b865cf9b5db6823f81d6275e273f1359d"
+    },
+    "Positive_90_percent_training_set_DeepUBI.fasta": {
+      "bytes": 4471289,
+      "sha256": "e9e3ba469ab533c204874687dd79e437a92428a6b351f512fa3e83eb31506c7e"
+    },
+    "aaindex31.txt": {
+      "bytes": 3357,
+      "sha256": "26ddb1bff5bcca51d1e1fb0d77b76da01564e6269bd9cac62774e36ac673524d"
+    }
+  },
+  "data_dir": "replication/MMUbiPred",
+  "overlap": {
+    "cropped_49_residue_windows": 3,
+    "proteins": 0,
+    "sites": 0
+  },
+  "test": {
+    "counts": {
+      "negative": 5020,
+      "positive": 7578,
+      "total": 12598
+    },
+    "reports": {
+      "negative": {
+        "dropped_unsupported": 0,
+        "invalid_center": 0,
+        "invalid_length": 0,
+        "kept_count": 5020,
+        "raw_count": 5020
+      },
+      "positive": {
+        "dropped_unsupported": 3,
+        "invalid_center": 0,
+        "invalid_length": 0,
+        "kept_count": 7578,
+        "raw_count": 7581
+      }
+    },
+    "unique_proteins": 1306,
+    "unique_sites": 12598,
+    "unique_windows": 12592
+  },
+  "train": {
+    "counts": {
+      "negative": 45136,
+      "positive": 46587,
+      "total": 91723
+    },
+    "reports": {
+      "negative": {
+        "dropped_unsupported": 14,
+        "invalid_center": 0,
+        "invalid_length": 0,
+        "kept_count": 45136,
+        "raw_count": 45150
+      },
+      "positive": {
+        "dropped_unsupported": 13,
+        "invalid_center": 0,
+        "invalid_length": 0,
+        "kept_count": 46587,
+        "raw_count": 46600
+      }
+    },
+    "unique_proteins": 10724,
+    "unique_sites": 91723,
+    "unique_windows": 91688,
+    "windows_with_conflicting_labels": 1
+  },
+  "window_size": 49
+}

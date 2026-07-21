@@ -1,4 +1,6 @@
 research-documents/
 replication/artifacts/
+experiment/outputs/*
+!experiment/outputs/README.md
 **/.ipynb_checkpoints/
 **/__pycache__/

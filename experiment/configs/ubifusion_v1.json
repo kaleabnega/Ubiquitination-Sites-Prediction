@@ -1,0 +1,26 @@
+{
+  "experiment_name": "ubifusion_v1",
+  "data_dir": "replication/MMUbiPred",
+  "output_dir": "experiment/outputs/ubifusion_v1_seed42",
+  "seed": 42,
+  "window_size": 49,
+  "validation_fraction": 0.1,
+  "split_strategy": "protein_grouped",
+  "batch_size": 256,
+  "num_workers": 2,
+  "epochs": 30,
+  "early_stopping_patience": 6,
+  "learning_rate": 0.0003,
+  "weight_decay": 0.0001,
+  "use_amp": true,
+  "model": {
+    "embedding_dim": 64,
+    "branch_dim": 128,
+    "conv_channels": 32,
+    "conv_kernels": [3, 5, 7, 11],
+    "transformer_heads": 4,
+    "transformer_layers": 2,
+    "transformer_ff_dim": 192,
+    "dropout": 0.25
+  }
+}

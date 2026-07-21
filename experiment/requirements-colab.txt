@@ -1,0 +1,5 @@
+# PyTorch, NumPy, and scikit-learn are supplied by the standard Colab runtime.
+# These bounds document the supported API range without forcing a large
+# framework reinstall in Colab.
+numpy>=1.26,<3
+scikit-learn>=1.4,<2
