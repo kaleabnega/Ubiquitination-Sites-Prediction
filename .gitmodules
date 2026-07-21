@@ -1,0 +1,3 @@
+[submodule "replication/MMUbiPred"]
+	path = replication/MMUbiPred
+	url = https://github.com/PakhrinLab/MMUbiPred.git
