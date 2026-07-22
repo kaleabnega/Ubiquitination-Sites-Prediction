@@ -79,6 +79,7 @@ def train_model(
 
     for epoch in range(1, epochs + 1):
         started = time.time()
+        print(f"epoch={epoch:03d} started", flush=True)
         model.train()
         total_loss = 0.0
         total_examples = 0
@@ -202,6 +203,7 @@ def refit_model(
 
     for epoch in range(1, epochs + 1):
         started = time.time()
+        print(f"refit_epoch={epoch:03d}/{epochs:03d} started", flush=True)
         model.train()
         total_loss = 0.0
         total_examples = 0
