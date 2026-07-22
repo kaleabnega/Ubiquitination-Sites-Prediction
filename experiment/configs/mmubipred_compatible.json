@@ -13,7 +13,9 @@
   "learning_rate": 0.001,
   "weight_decay": 0.0,
   "optimizer": "adam",
-  "use_amp": true,
+  "optimizer_epsilon": 1e-7,
+  "gradient_clip_norm": null,
+  "use_amp": false,
   "model": {
     "architecture": "mmubipred_compatible",
     "l1_coefficient": 0.0001

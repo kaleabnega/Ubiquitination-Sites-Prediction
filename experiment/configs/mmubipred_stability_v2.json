@@ -1,0 +1,11 @@
+{
+  "benchmark_name": "mmubipred_stability_v2",
+  "reference_model": "mmubipred_compatible",
+  "seeds": [42, 123, 2026],
+  "models": [
+    {
+      "name": "mmubipred_compatible",
+      "config": "experiment/configs/mmubipred_compatible.json"
+    }
+  ]
+}

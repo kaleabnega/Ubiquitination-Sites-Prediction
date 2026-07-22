@@ -13,6 +13,8 @@
   "learning_rate": 0.0003,
   "weight_decay": 0.0001,
   "optimizer": "adamw",
+  "optimizer_epsilon": 1e-8,
+  "gradient_clip_norm": 1.0,
   "use_amp": true,
   "model": {
     "architecture": "ubifusion_v1",

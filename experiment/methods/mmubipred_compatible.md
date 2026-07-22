@@ -24,12 +24,22 @@ released Adam learning rate of `1e-3`, batch size 32, and 15-epoch limit.
 
 ## Controlled-comparison differences
 
-The reimplementation uses PyTorch with mixed precision and gradient clipping,
-so framework initializers, recurrent kernels, optimization details, and
-floating-point behavior can differ from Keras. A scalar binary
+The reimplementation uses PyTorch, so recurrent kernels and floating-point
+behavior can still differ from Keras. It explicitly matches the relevant
+Keras defaults: Glorot-uniform dense/standard-convolution kernels, He-normal
+kernels where named in the notebook, zero biases, the LSTM unit forget bias,
+the embedding table's `[-0.05, 0.05]` initialization, full-precision training,
+and Adam epsilon `1e-7`. Gradient clipping is disabled for this baseline. A
+scalar binary
 logit equal to `class_1_logit - class_0_logit` is used for training; binary
 cross-entropy on that value is mathematically equivalent to two-class softmax
 cross-entropy.
+
+These settings were added after the initial PyTorch-default benchmark produced
+a dead, all-positive classifier for seed 123. That run remains attributable to
+commit `b5c04c4`; it must not be included as evidence of candidate superiority.
+The `mmubipred_stability_v2.json` suite reruns only the corrected baseline and
+automatically marks any single-class prediction run as a collapsed comparison.
 
 For leakage-aware model selection, all compared architectures use the same
 protein-grouped development indices for each seed. Checkpoint selection uses

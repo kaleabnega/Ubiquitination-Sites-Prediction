@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,7 +14,17 @@ SPEC = importlib.util.spec_from_file_location("run_validation_benchmark", SCRIPT
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError(f"Could not import {SCRIPT_PATH}")
 benchmark = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = benchmark
 SPEC.loader.exec_module(benchmark)
+
+MERGE_PATH = PROJECT_ROOT / "experiment" / "scripts" / "merge_validation_benchmarks.py"
+MERGE_SPEC = importlib.util.spec_from_file_location(
+    "merge_validation_benchmarks", MERGE_PATH
+)
+if MERGE_SPEC is None or MERGE_SPEC.loader is None:
+    raise RuntimeError(f"Could not import {MERGE_PATH}")
+merge = importlib.util.module_from_spec(MERGE_SPEC)
+MERGE_SPEC.loader.exec_module(merge)
 
 
 def run_record(model: str, seed: int, mcc: float) -> dict[str, object]:
@@ -19,6 +32,7 @@ def run_record(model: str, seed: int, mcc: float) -> dict[str, object]:
         "model": model,
         "seed": seed,
         "validation_indices_sha256": f"split-{seed}",
+        "collapsed": False,
         "fixed_mcc": mcc,
         "fixed_accuracy": mcc,
         "fixed_sensitivity": mcc,
@@ -52,6 +66,26 @@ class BenchmarkTests(unittest.TestCase):
         runs[1]["validation_indices_sha256"] = "different-split"
         with self.assertRaises(RuntimeError):
             benchmark.validate_paired_splits(runs)
+
+    def test_collapsed_run_invalidates_comparison(self) -> None:
+        runs = [run_record("baseline", 1, 0.0), run_record("candidate", 1, 0.5)]
+        runs[0]["collapsed"] = True
+        summary = benchmark.summarize("test", "baseline", runs)
+        self.assertFalse(summary["comparison_valid"])
+        self.assertEqual(
+            summary["collapsed_runs"], [{"model": "baseline", "seed": 1}]
+        )
+
+    def test_merge_selects_requested_model(self) -> None:
+        payload = {
+            "runs": [run_record("baseline", 1, 0.4), run_record("candidate", 1, 0.5)]
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            summary_path = Path(directory) / "summary.json"
+            summary_path.write_text(json.dumps(payload), encoding="utf-8")
+            selected = merge.selected_runs(summary_path, "candidate")
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["model"], "candidate")
 
 
 if __name__ == "__main__":

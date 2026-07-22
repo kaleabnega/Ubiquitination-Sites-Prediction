@@ -23,15 +23,24 @@ def _build_optimizer(
     name: str,
     learning_rate: float,
     weight_decay: float,
+    epsilon: float,
 ) -> torch.optim.Optimizer:
+    if epsilon <= 0:
+        raise ValueError("optimizer epsilon must be positive")
     parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
     if name == "adam":
         return torch.optim.Adam(
-            parameters, lr=learning_rate, weight_decay=weight_decay
+            parameters,
+            lr=learning_rate,
+            weight_decay=weight_decay,
+            eps=epsilon,
         )
     if name == "adamw":
         return torch.optim.AdamW(
-            parameters, lr=learning_rate, weight_decay=weight_decay
+            parameters,
+            lr=learning_rate,
+            weight_decay=weight_decay,
+            eps=epsilon,
         )
     raise ValueError("optimizer must be 'adam' or 'adamw'")
 
@@ -88,9 +97,13 @@ def train_model(
     learning_rate: float,
     weight_decay: float,
     optimizer_name: str,
+    optimizer_epsilon: float,
+    gradient_clip_norm: float | None,
     use_amp: bool,
     checkpoint_metadata: dict[str, object],
 ) -> dict[str, object]:
+    if gradient_clip_norm is not None and gradient_clip_norm <= 0:
+        raise ValueError("gradient_clip_norm must be positive or None")
     run_dir = Path(output_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -100,6 +113,7 @@ def train_model(
         name=optimizer_name,
         learning_rate=learning_rate,
         weight_decay=weight_decay,
+        epsilon=optimizer_epsilon,
     )
     criterion = nn.BCEWithLogitsLoss()
     amp_enabled = bool(use_amp and device.type == "cuda")
@@ -130,7 +144,10 @@ def train_model(
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            if gradient_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm=gradient_clip_norm
+                )
             scaler.step(optimizer)
             scaler.update()
 
@@ -215,6 +232,8 @@ def refit_model(
     learning_rate: float,
     weight_decay: float,
     optimizer_name: str,
+    optimizer_epsilon: float,
+    gradient_clip_norm: float | None,
     use_amp: bool,
     validation_selected_threshold: float,
     checkpoint_metadata: dict[str, object],
@@ -228,6 +247,8 @@ def refit_model(
 
     if epochs <= 0:
         raise ValueError("epochs must be positive")
+    if gradient_clip_norm is not None and gradient_clip_norm <= 0:
+        raise ValueError("gradient_clip_norm must be positive or None")
 
     run_dir = Path(output_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -237,6 +258,7 @@ def refit_model(
         name=optimizer_name,
         learning_rate=learning_rate,
         weight_decay=weight_decay,
+        epsilon=optimizer_epsilon,
     )
     criterion = nn.BCEWithLogitsLoss()
     amp_enabled = bool(use_amp and device.type == "cuda")
@@ -261,7 +283,10 @@ def refit_model(
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            if gradient_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm=gradient_clip_norm
+                )
             scaler.step(optimizer)
             scaler.update()
 

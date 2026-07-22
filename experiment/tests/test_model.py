@@ -73,6 +73,27 @@ class ModelTests(unittest.TestCase):
         loss.backward()
         self.assertIsNotNone(model.fusion_output.weight.grad)
 
+    def test_mmubipred_uses_keras_style_initialization(self) -> None:
+        torch.manual_seed(123)
+        model = MMUbiPredCompatible(
+            aaindex_lookup=np.zeros((21, 31), dtype=np.float32),
+            window_size=49,
+        )
+        torch.testing.assert_close(
+            model.fusion_dense.bias, torch.zeros_like(model.fusion_dense.bias)
+        )
+        self.assertLessEqual(
+            float(model.sequence_embedding.weight.detach().abs().max()), 0.05
+        )
+        forget_bias = model.aaindex_lstm.bias_ih_l0.detach()[64:128]
+        torch.testing.assert_close(forget_bias, torch.ones_like(forget_bias))
+
+        model.eval()
+        tokens = torch.randint(0, 20, (32, 49))
+        tokens[:, 24] = 11
+        logits = model(tokens)
+        self.assertGreater(float(logits.detach().std()), 1e-4)
+
 
 if __name__ == "__main__":
     unittest.main()

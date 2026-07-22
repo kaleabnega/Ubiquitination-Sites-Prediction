@@ -106,6 +106,28 @@ and does not expose the independent test. A second suite,
 `experiment/configs/ubifusion_ablation.json`, compares gated UbiFusionNet v1
 against its no-context and fixed-mean-fusion variants after the baseline stage.
 
+If a reconstructed baseline run collapses to one-class predictions, do not use
+the aggregate comparison. The focused stability suite reruns only the baseline
+with Keras-compatible initialization and numerical settings:
+
+```bash
+python experiment/scripts/run_validation_benchmark.py \
+  --suite experiment/configs/mmubipred_stability_v2.json
+```
+
+Combine those corrected reference runs with the already completed UbiFusionNet
+runs without retraining the candidate:
+
+```bash
+python experiment/scripts/merge_validation_benchmarks.py \
+  --reference-summary experiment/outputs/benchmarks/mmubipred_stability_v2/summary.json \
+  --reference-model mmubipred_compatible \
+  --candidate-summary experiment/outputs/benchmarks/paired_baseline_v1/summary.json \
+  --candidate-model ubifusion_v1 \
+  --benchmark-name paired_baseline_stabilized_v2 \
+  --output-dir experiment/outputs/benchmarks/paired_baseline_stabilized_v2
+```
+
 ## Locked evaluation
 
 Run this only after the architecture and hyperparameters have been selected

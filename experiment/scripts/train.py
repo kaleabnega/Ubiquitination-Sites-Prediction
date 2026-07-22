@@ -206,6 +206,10 @@ def main() -> None:
             getattr(model, "diagnostic_name", "branch_diagnostics")
         ),
     }
+    gradient_clip_value = config.get("gradient_clip_norm", 1.0)
+    gradient_clip_norm = (
+        None if gradient_clip_value is None else float(gradient_clip_value)
+    )
     development_summary = train_model(
         model=model,
         train_loader=train_loader,
@@ -217,6 +221,8 @@ def main() -> None:
         learning_rate=float(config["learning_rate"]),
         weight_decay=float(config["weight_decay"]),
         optimizer_name=str(config.get("optimizer", "adamw")),
+        optimizer_epsilon=float(config.get("optimizer_epsilon", 1e-8)),
+        gradient_clip_norm=gradient_clip_norm,
         use_amp=bool(config["use_amp"]),
         checkpoint_metadata=checkpoint_metadata,
     )
@@ -229,6 +235,7 @@ def main() -> None:
         getattr(model, "diagnostic_name", "branch_diagnostics")
     )
     diagnostic_key = f"mean_{diagnostic_name}"
+    fixed_predictions = probabilities >= 0.5
     validation_results = {
         "fixed_threshold": compute_metrics(labels, probabilities, threshold=0.5),
         "validation_selected_threshold": compute_metrics(
@@ -237,6 +244,16 @@ def main() -> None:
         "branch_names": list(getattr(model, "branch_names", ())),
         "branch_diagnostic_name": diagnostic_name,
         diagnostic_key: branch_diagnostics.mean(axis=0).tolist(),
+        "prediction_diagnostics": {
+            "probability_mean": float(probabilities.mean()),
+            "probability_standard_deviation": float(probabilities.std()),
+            "predicted_positive_fraction_at_0_5": float(
+                fixed_predictions.mean()
+            ),
+            "single_class_predictions_at_0_5": bool(
+                fixed_predictions.all() or (~fixed_predictions).all()
+            ),
+        },
         "development_selection": development_summary,
     }
     write_json(output_dir / "validation_metrics.json", validation_results)
@@ -295,6 +312,8 @@ def main() -> None:
         learning_rate=float(config["learning_rate"]),
         weight_decay=float(config["weight_decay"]),
         optimizer_name=str(config.get("optimizer", "adamw")),
+        optimizer_epsilon=float(config.get("optimizer_epsilon", 1e-8)),
+        gradient_clip_norm=gradient_clip_norm,
         use_amp=bool(config["use_amp"]),
         validation_selected_threshold=selected_threshold,
         checkpoint_metadata=checkpoint_metadata,

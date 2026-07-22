@@ -10,6 +10,33 @@ from torch import nn
 from torch.nn import functional as F
 
 
+def _keras_glorot_uniform(module: nn.Linear | nn.Conv1d) -> None:
+    nn.init.xavier_uniform_(module.weight)
+    if module.bias is not None:
+        nn.init.zeros_(module.bias)
+
+
+def _keras_he_normal(module: nn.Linear | nn.Conv1d) -> None:
+    nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="relu")
+    if module.bias is not None:
+        nn.init.zeros_(module.bias)
+
+
+def _initialize_keras_lstm(lstm: nn.LSTM) -> None:
+    """Approximate Keras LSTM defaults, including the unit forget bias."""
+
+    hidden_size = lstm.hidden_size
+    for name, parameter in lstm.named_parameters():
+        if "weight_ih" in name:
+            nn.init.xavier_uniform_(parameter)
+        elif "weight_hh" in name:
+            nn.init.orthogonal_(parameter)
+        elif "bias" in name:
+            nn.init.zeros_(parameter)
+    with torch.no_grad():
+        lstm.bias_ih_l0[hidden_size : hidden_size * 2].fill_(1.0)
+
+
 class ResidualConvBlock(nn.Module):
     def __init__(self, channels: int, dropout: float) -> None:
         super().__init__()
@@ -358,6 +385,29 @@ class MMUbiPredCompatible(nn.Module):
             self.one_hot_dense,
             self.one_hot_output,
         )
+        self._initialize_like_released_keras_model()
+
+    def _initialize_like_released_keras_model(self) -> None:
+        _initialize_keras_lstm(self.aaindex_lstm)
+        for module in (
+            self.aaindex_dense,
+            self.aaindex_output,
+            self.one_hot_conv,
+            self.one_hot_dense,
+            self.one_hot_output,
+            self.embedding_output,
+            self.fusion_dense,
+            self.fusion_output,
+        ):
+            _keras_glorot_uniform(module)
+        nn.init.uniform_(self.sequence_embedding.weight, -0.05, 0.05)
+        for module in (
+            self.embedding_conv_1,
+            self.embedding_conv_2,
+            self.embedding_dense_1,
+            self.embedding_dense_2,
+        ):
+            _keras_he_normal(module)
 
     def regularization_loss(self) -> torch.Tensor:
         penalty = sum(module.weight.abs().sum() for module in self._l1_modules)

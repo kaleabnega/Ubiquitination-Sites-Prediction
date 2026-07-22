@@ -50,12 +50,24 @@ def flatten_run(
     selected = metrics["validation_selected_threshold"]
     development = metrics["development_selection"]
     split = manifest["development_split"]
+    prediction_diagnostics = metrics.get("prediction_diagnostics", {})
+    collapsed = bool(
+        prediction_diagnostics.get(
+            "single_class_predictions_at_0_5",
+            (float(fixed["sensitivity"]) == 1.0 and float(fixed["specificity"]) == 0.0)
+            or (
+                float(fixed["sensitivity"]) == 0.0
+                and float(fixed["specificity"]) == 1.0
+            ),
+        )
+    )
     return {
         "model": model_name,
         "seed": seed,
         "output_dir": str(output_dir.relative_to(PROJECT_ROOT)),
         "validation_indices_sha256": split["validation_indices_sha256"],
         "best_epoch": development["best_epoch"],
+        "collapsed": collapsed,
         "fixed_mcc": fixed["mcc"],
         "fixed_accuracy": fixed["accuracy"],
         "fixed_sensitivity": fixed["sensitivity"],
@@ -130,6 +142,14 @@ def summarize(
         "evaluation_scope": "released training data only; independent test locked",
         "reference_model": reference_model,
         "completed_runs": len(runs),
+        "collapsed_runs": [
+            {"model": run["model"], "seed": run["seed"]}
+            for run in runs
+            if bool(run.get("collapsed", False))
+        ],
+        "comparison_valid": not any(
+            bool(run.get("collapsed", False)) for run in runs
+        ),
         "runs": runs,
         "aggregates": aggregates,
         "paired_differences": paired_differences,
