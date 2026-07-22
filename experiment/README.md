@@ -42,6 +42,7 @@ in later experiments after this same-data architecture baseline is measured.
 ```text
 experiment/
 ├── configs/                 Versioned experiment configurations
+├── methods/                 Architecture provenance and implementation notes
 ├── notebooks/               Thin Colab orchestration notebooks
 ├── scripts/                 Auditing, training, and evaluation entry points
 ├── src/ubipred/             Reusable data, model, metric, and training code
@@ -82,6 +83,28 @@ many epochs on all 91,723 released training samples. It writes the final
 checkpoint, histories, validation predictions, and provenance manifest to the
 configured output directory. It does **not** access the locked independent
 test set.
+
+## Paired development benchmark
+
+Before evaluating another architecture on the independent test set, compare it
+against the [MMUbiPred-compatible reimplementation](methods/mmubipred_compatible.md)
+on identical protein-grouped development splits. The default suite runs both
+models for seeds 42, 123, and 2026 and reports mean, standard deviation, and
+paired candidate-minus-baseline differences.
+
+[Open the paired benchmark in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/02_Paired_Validation_Benchmark_Colab.ipynb)
+
+From the repository root, the equivalent command is:
+
+```bash
+python experiment/scripts/run_validation_benchmark.py \
+  --suite experiment/configs/paired_baseline_v1.json
+```
+
+All suite runs pass `--development-only`, which prevents full-data refitting
+and does not expose the independent test. A second suite,
+`experiment/configs/ubifusion_ablation.json`, compares gated UbiFusionNet v1
+against its no-context and fixed-mean-fusion variants after the baseline stage.
 
 ## Locked evaluation
 

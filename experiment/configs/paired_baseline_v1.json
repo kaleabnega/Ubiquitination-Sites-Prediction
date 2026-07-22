@@ -1,0 +1,15 @@
+{
+  "benchmark_name": "paired_baseline_v1",
+  "reference_model": "mmubipred_compatible",
+  "seeds": [42, 123, 2026],
+  "models": [
+    {
+      "name": "mmubipred_compatible",
+      "config": "experiment/configs/mmubipred_compatible.json"
+    },
+    {
+      "name": "ubifusion_v1",
+      "config": "experiment/configs/ubifusion_v1.json"
+    }
+  ]
+}

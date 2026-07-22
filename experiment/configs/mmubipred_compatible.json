@@ -1,0 +1,21 @@
+{
+  "experiment_name": "mmubipred_compatible",
+  "data_dir": "replication/MMUbiPred",
+  "output_dir": "experiment/outputs/mmubipred_compatible_seed42",
+  "seed": 42,
+  "window_size": 49,
+  "validation_fraction": 0.1,
+  "split_strategy": "protein_grouped",
+  "batch_size": 32,
+  "num_workers": 2,
+  "epochs": 15,
+  "early_stopping_patience": 15,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0,
+  "optimizer": "adam",
+  "use_amp": true,
+  "model": {
+    "architecture": "mmubipred_compatible",
+    "l1_coefficient": 0.0001
+  }
+}

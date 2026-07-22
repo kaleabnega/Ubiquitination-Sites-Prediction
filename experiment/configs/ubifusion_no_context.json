@@ -1,7 +1,7 @@
 {
-  "experiment_name": "ubifusion_v1",
+  "experiment_name": "ubifusion_no_context",
   "data_dir": "replication/MMUbiPred",
-  "output_dir": "experiment/outputs/ubifusion_v1_seed42",
+  "output_dir": "experiment/outputs/ubifusion_no_context_seed42",
   "seed": 42,
   "window_size": 49,
   "validation_fraction": 0.1,
@@ -24,7 +24,7 @@
     "transformer_layers": 2,
     "transformer_ff_dim": 192,
     "dropout": 0.25,
-    "active_branches": ["context", "one_hot", "aaindex"],
+    "active_branches": ["one_hot", "aaindex"],
     "fusion": "gated"
   }
 }

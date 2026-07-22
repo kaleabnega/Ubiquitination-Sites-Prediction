@@ -73,6 +73,11 @@ def main() -> None:
     )
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--seed", type=int)
+    parser.add_argument(
+        "--development-only",
+        action="store_true",
+        help="Select and report on development data without a full-data refit.",
+    )
     args = parser.parse_args()
 
     config = json.loads(args.config.read_text(encoding="utf-8"))
@@ -162,6 +167,12 @@ def main() -> None:
             "train_proteins": len(train_groups),
             "validation_proteins": len(validation_groups),
             "protein_overlap": len(train_groups & validation_groups),
+            "train_indices_sha256": hashlib.sha256(
+                np.asarray(train_indices, dtype=np.int64).tobytes()
+            ).hexdigest(),
+            "validation_indices_sha256": hashlib.sha256(
+                np.asarray(validation_indices, dtype=np.int64).tobytes()
+            ).hexdigest(),
         },
         "artifacts": {
             filename: {
@@ -171,6 +182,7 @@ def main() -> None:
             for filename in source_files
         },
         "locked_test_accessed": False,
+        "development_only": args.development_only,
     }
     write_json(output_dir / "run_manifest.json", manifest)
 
@@ -189,6 +201,10 @@ def main() -> None:
         "aaindex_sha256": sha256(aaindex_path),
         "project_git_commit": manifest["project_git_commit"],
         "upstream_git_commit": manifest["upstream_git_commit"],
+        "branch_names": list(getattr(model, "branch_names", ())),
+        "branch_diagnostic_name": str(
+            getattr(model, "diagnostic_name", "branch_diagnostics")
+        ),
     }
     development_summary = train_model(
         model=model,
@@ -200,20 +216,27 @@ def main() -> None:
         patience=int(config["early_stopping_patience"]),
         learning_rate=float(config["learning_rate"]),
         weight_decay=float(config["weight_decay"]),
+        optimizer_name=str(config.get("optimizer", "adamw")),
         use_amp=bool(config["use_amp"]),
         checkpoint_metadata=checkpoint_metadata,
     )
 
-    labels, probabilities, indices, gates = predict(
+    labels, probabilities, indices, branch_diagnostics = predict(
         model, validation_loader, device
     )
     selected_threshold, _ = select_mcc_threshold(labels, probabilities)
+    diagnostic_name = str(
+        getattr(model, "diagnostic_name", "branch_diagnostics")
+    )
+    diagnostic_key = f"mean_{diagnostic_name}"
     validation_results = {
         "fixed_threshold": compute_metrics(labels, probabilities, threshold=0.5),
         "validation_selected_threshold": compute_metrics(
             labels, probabilities, threshold=selected_threshold
         ),
-        "mean_branch_gates": gates.mean(axis=0).tolist(),
+        "branch_names": list(getattr(model, "branch_names", ())),
+        "branch_diagnostic_name": diagnostic_name,
+        diagnostic_key: branch_diagnostics.mean(axis=0).tolist(),
         "development_selection": development_summary,
     }
     write_json(output_dir / "validation_metrics.json", validation_results)
@@ -222,8 +245,25 @@ def main() -> None:
         labels=labels,
         probabilities=probabilities,
         dataset_indices=indices,
-        gates=gates,
+        branch_diagnostics=branch_diagnostics,
     )
+
+    if args.development_only:
+        training_summary = {
+            "development_selection": development_summary,
+            "full_training_refit": None,
+        }
+        write_json(output_dir / "training_summary.json", training_summary)
+        manifest["final_refit"] = {
+            "performed": False,
+            "reason": "development-only benchmark run",
+            "test_accessed": False,
+        }
+        write_json(output_dir / "run_manifest.json", manifest)
+        print(json.dumps(validation_results, indent=2, sort_keys=True))
+        print("Development-only run completed; full-data refit was skipped.")
+        print("Locked independent test set was not accessed.")
+        return
 
     # The development split selects the epoch count and reporting threshold.
     # Reinitialize and refit on every released training sample so the final
@@ -254,6 +294,7 @@ def main() -> None:
         epochs=int(development_summary["best_epoch"]),
         learning_rate=float(config["learning_rate"]),
         weight_decay=float(config["weight_decay"]),
+        optimizer_name=str(config.get("optimizer", "adamw")),
         use_amp=bool(config["use_amp"]),
         validation_selected_threshold=selected_threshold,
         checkpoint_metadata=checkpoint_metadata,

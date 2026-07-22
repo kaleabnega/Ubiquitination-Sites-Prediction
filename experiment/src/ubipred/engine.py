@@ -18,6 +18,37 @@ def _autocast_context(device: torch.device, enabled: bool):
     return torch.amp.autocast(device_type=device.type, enabled=enabled)
 
 
+def _build_optimizer(
+    model: nn.Module,
+    name: str,
+    learning_rate: float,
+    weight_decay: float,
+) -> torch.optim.Optimizer:
+    parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    if name == "adam":
+        return torch.optim.Adam(
+            parameters, lr=learning_rate, weight_decay=weight_decay
+        )
+    if name == "adamw":
+        return torch.optim.AdamW(
+            parameters, lr=learning_rate, weight_decay=weight_decay
+        )
+    raise ValueError("optimizer must be 'adam' or 'adamw'")
+
+
+def _loss_with_regularization(
+    model: nn.Module,
+    criterion: nn.Module,
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+) -> torch.Tensor:
+    loss = criterion(logits, labels)
+    regularization_loss = getattr(model, "regularization_loss", None)
+    if callable(regularization_loss):
+        loss = loss + regularization_loss()
+    return loss
+
+
 def predict(
     model: nn.Module,
     loader: DataLoader,
@@ -56,6 +87,7 @@ def train_model(
     patience: int,
     learning_rate: float,
     weight_decay: float,
+    optimizer_name: str,
     use_amp: bool,
     checkpoint_metadata: dict[str, object],
 ) -> dict[str, object]:
@@ -63,8 +95,11 @@ def train_model(
     run_dir.mkdir(parents=True, exist_ok=True)
 
     model.to(device)
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+    optimizer = _build_optimizer(
+        model,
+        name=optimizer_name,
+        learning_rate=learning_rate,
+        weight_decay=weight_decay,
     )
     criterion = nn.BCEWithLogitsLoss()
     amp_enabled = bool(use_amp and device.type == "cuda")
@@ -91,7 +126,7 @@ def train_model(
 
             with _autocast_context(device, enabled=amp_enabled):
                 logits = model(tokens)
-                loss = criterion(logits, labels)
+                loss = _loss_with_regularization(model, criterion, logits, labels)
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
@@ -112,13 +147,16 @@ def train_model(
         selected_threshold, selected_mcc = select_mcc_threshold(
             validation_labels, validation_probabilities
         )
+        diagnostic_name = str(getattr(model, "diagnostic_name", "branch_diagnostics"))
+        diagnostic_key = f"mean_{diagnostic_name}"
         epoch_record = {
             "epoch": epoch,
             "train_loss": total_loss / max(total_examples, 1),
             "validation_fixed": fixed_metrics,
             "validation_selected_threshold": selected_threshold,
             "validation_selected_mcc": selected_mcc,
-            "mean_branch_gates": validation_gates.mean(axis=0).tolist(),
+            "branch_diagnostic_name": diagnostic_name,
+            diagnostic_key: validation_gates.mean(axis=0).tolist(),
             "seconds": time.time() - started,
         }
         history.append(epoch_record)
@@ -130,7 +168,7 @@ def train_model(
             f"loss={epoch_record['train_loss']:.5f} "
             f"val_mcc@0.5={current_mcc:.5f} "
             f"val_auprc={fixed_metrics['auprc']:.5f} "
-            f"gate_mean={epoch_record['mean_branch_gates']}"
+            f"{diagnostic_key}={epoch_record[diagnostic_key]}"
         )
 
         if current_mcc > best_mcc:
@@ -176,6 +214,7 @@ def refit_model(
     epochs: int,
     learning_rate: float,
     weight_decay: float,
+    optimizer_name: str,
     use_amp: bool,
     validation_selected_threshold: float,
     checkpoint_metadata: dict[str, object],
@@ -193,8 +232,11 @@ def refit_model(
     run_dir = Path(output_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     model.to(device)
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+    optimizer = _build_optimizer(
+        model,
+        name=optimizer_name,
+        learning_rate=learning_rate,
+        weight_decay=weight_decay,
     )
     criterion = nn.BCEWithLogitsLoss()
     amp_enabled = bool(use_amp and device.type == "cuda")
@@ -215,7 +257,7 @@ def refit_model(
 
             with _autocast_context(device, enabled=amp_enabled):
                 logits = model(tokens)
-                loss = criterion(logits, labels)
+                loss = _loss_with_regularization(model, criterion, logits, labels)
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)

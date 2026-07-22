@@ -102,7 +102,13 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    labels, probabilities, indices, gates = predict(model, loader, device)
+    labels, probabilities, indices, branch_diagnostics = predict(
+        model, loader, device
+    )
+    branch_names = list(getattr(model, "branch_names", ()))
+    diagnostic_name = str(
+        getattr(model, "diagnostic_name", "branch_diagnostics")
+    )
     selected_threshold = float(checkpoint["validation_selected_threshold"])
     fixed_metrics = compute_metrics(labels, probabilities, threshold=0.5)
     selected_metrics = compute_metrics(
@@ -124,7 +130,9 @@ def main() -> None:
         "validation_selected_threshold": selected_metrics,
         "paper_baseline": PAPER_BASELINE,
         "fixed_threshold_difference_from_paper": comparison,
-        "mean_branch_gates": gates.mean(axis=0).tolist(),
+        "branch_names": branch_names,
+        "branch_diagnostic_name": diagnostic_name,
+        f"mean_{diagnostic_name}": branch_diagnostics.mean(axis=0).tolist(),
     }
     write_json(run_dir / "locked_test_metrics.json", results)
     np.savez_compressed(
@@ -132,7 +140,7 @@ def main() -> None:
         labels=labels,
         probabilities=probabilities,
         dataset_indices=indices,
-        gates=gates,
+        branch_diagnostics=branch_diagnostics,
     )
 
     with (run_dir / "locked_test_predictions.tsv").open(
@@ -146,13 +154,11 @@ def main() -> None:
                 "label",
                 "probability",
                 "prediction_at_0.5",
-                "context_gate",
-                "one_hot_gate",
-                "aaindex_gate",
+                *[f"{name}_{diagnostic_name}" for name in branch_names],
             ]
         )
-        for label, probability, index, gate_values in zip(
-            labels, probabilities, indices, gates
+        for label, probability, index, diagnostic_values in zip(
+            labels, probabilities, indices, branch_diagnostics
         ):
             record = records[int(index)]
             writer.writerow(
@@ -162,7 +168,7 @@ def main() -> None:
                     int(label),
                     float(probability),
                     int(probability >= 0.5),
-                    *[float(value) for value in gate_values],
+                    *[float(value) for value in diagnostic_values],
                 ]
             )
 

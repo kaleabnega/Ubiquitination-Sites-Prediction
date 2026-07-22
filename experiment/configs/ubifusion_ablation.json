@@ -1,0 +1,19 @@
+{
+  "benchmark_name": "ubifusion_ablation",
+  "reference_model": "ubifusion_v1",
+  "seeds": [42, 123, 2026],
+  "models": [
+    {
+      "name": "ubifusion_v1",
+      "config": "experiment/configs/ubifusion_v1.json"
+    },
+    {
+      "name": "ubifusion_no_context",
+      "config": "experiment/configs/ubifusion_no_context.json"
+    },
+    {
+      "name": "ubifusion_mean_fusion",
+      "config": "experiment/configs/ubifusion_mean_fusion.json"
+    }
+  ]
+}
