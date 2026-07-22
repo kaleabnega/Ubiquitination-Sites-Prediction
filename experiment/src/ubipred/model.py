@@ -723,7 +723,16 @@ class CenterLoRAESM2(nn.Module):
             target_modules=[str(value) for value in lora_target_modules],
             bias="none",
         )
-        backbone = get_peft_model(base_backbone, lora_config)
+        try:
+            backbone = get_peft_model(base_backbone, lora_config)
+        except ImportError as error:
+            if "incompatible version of torchao" in str(error).lower():
+                raise ImportError(
+                    "Colab's optional torchao package is incompatible with PEFT. "
+                    "Run `%pip uninstall -y torchao` before training; this "
+                    "experiment does not use TorchAO."
+                ) from error
+            raise
 
         special_ids = {
             "cls_token_id": tokenizer.cls_token_id,

@@ -230,6 +230,37 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(model.esm_backbone.lora_config.target_modules, ["query", "value"])
         self.assertEqual(model.esm_backbone.lora_config.r, 8)
 
+    def test_center_lora_factory_explains_incompatible_torchao(self) -> None:
+        fake_peft = ModuleType("peft")
+        fake_peft.LoraConfig = lambda **kwargs: SimpleNamespace(**kwargs)
+
+        def reject_torchao(*args: object, **kwargs: object) -> None:
+            del args, kwargs
+            raise ImportError(
+                "Found an incompatible version of torchao. Found version 0.10.0"
+            )
+
+        fake_peft.get_peft_model = reject_torchao
+        fake_transformers = ModuleType("transformers")
+        fake_transformers.AutoModel = FakeAutoModel
+        fake_transformers.AutoTokenizer = FakeESMTokenizer
+
+        with patch.dict(
+            sys.modules,
+            {"peft": fake_peft, "transformers": fake_transformers},
+        ):
+            with self.assertRaisesRegex(ImportError, "pip uninstall -y torchao"):
+                CenterLoRAESM2.from_pretrained(
+                    pretrained_model_name="fake-esm",
+                    lora_rank=8,
+                    lora_alpha=16,
+                    lora_dropout=0.1,
+                    lora_target_modules=("query", "value"),
+                    window_size=49,
+                    classifier_hidden_dim=8,
+                    dropout=0.0,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

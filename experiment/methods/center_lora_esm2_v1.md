@@ -23,6 +23,12 @@ No CNN, AAindex, fusion gate, focal loss, or additional labelled data is used.
 The released training data are approximately balanced, so ordinary binary
 cross-entropy is retained.
 
+The Colab notebook removes the optional preinstalled `torchao` package before
+training. Colab currently supplies `torchao 0.10.0`, while PEFT 0.19.1 rejects
+TorchAO versions below 0.16 during adapter injection. This experiment does not
+use quantization or TorchAO, so removing that optional package changes neither
+the architecture nor the numerical training protocol.
+
 ## Selection contract
 
 - Seed: 42 for the first screen.
