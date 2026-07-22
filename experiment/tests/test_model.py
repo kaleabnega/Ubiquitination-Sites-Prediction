@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import torch
@@ -11,7 +12,20 @@ import torch
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "experiment" / "src"))
 
-from ubipred.model import MMUbiPredCompatible, UbiFusionNet  # noqa: E402
+from ubipred.model import ESM2CrossFusion, MMUbiPredCompatible, UbiFusionNet  # noqa: E402
+
+
+class FakeESMBackbone(torch.nn.Module):
+    def __init__(self, hidden_size: int = 16) -> None:
+        super().__init__()
+        self.config = SimpleNamespace(hidden_size=hidden_size)
+        self.embedding = torch.nn.Embedding(32, hidden_size)
+
+    def forward(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor
+    ) -> SimpleNamespace:
+        del attention_mask
+        return SimpleNamespace(last_hidden_state=self.embedding(input_ids))
 
 
 class ModelTests(unittest.TestCase):
@@ -93,6 +107,40 @@ class ModelTests(unittest.TestCase):
         tokens[:, 24] = 11
         logits = model(tokens)
         self.assertGreater(float(logits.detach().std()), 1e-4)
+
+    def test_esm2_crossfusion_outputs_and_compacts_padding(self) -> None:
+        backbone = FakeESMBackbone()
+        model = ESM2CrossFusion(
+            aaindex_lookup=np.zeros((21, 31), dtype=np.float32),
+            backbone=backbone,
+            residue_token_lookup=list(range(4, 24)) + [0],
+            cls_token_id=1,
+            eos_token_id=2,
+            pad_token_id=0,
+            window_size=49,
+            branch_dim=32,
+            conv_channels=8,
+            conv_kernels=(3, 5),
+            conv_dilations=(1, 2),
+            dropout=0.0,
+            freeze_backbone=True,
+        )
+        tokens = torch.full((2, 49), 20, dtype=torch.long)
+        tokens[:, 10:39] = 0
+        tokens[:, 24] = 11
+
+        esm_ids, attention_mask, center_positions = model._esm_inputs(tokens)
+        self.assertEqual(attention_mask.sum(dim=1).tolist(), [31, 31])
+        self.assertEqual(center_positions.tolist(), [15, 15])
+        self.assertEqual(esm_ids[:, 30].tolist(), [2, 2])
+
+        model.train()
+        self.assertFalse(backbone.training)
+        logits, gates = model(tokens, return_gates=True)
+        self.assertEqual(tuple(logits.shape), (2,))
+        self.assertEqual(tuple(gates.shape), (2, 3))
+        torch.testing.assert_close(gates.sum(dim=1), torch.ones(2))
+        self.assertFalse(any(parameter.requires_grad for parameter in backbone.parameters()))
 
 
 if __name__ == "__main__":

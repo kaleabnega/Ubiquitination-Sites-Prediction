@@ -320,6 +320,321 @@ class UbiFusionNet(nn.Module):
         return logits
 
 
+class ESM2CrossFusion(nn.Module):
+    """Frozen ESM-2 representations fused with local and biochemical features.
+
+    The protein language model supplies contextual residue representations.
+    A dilated convolution branch retains explicit local motif information, and
+    an AAindex branch retains the same physicochemical inputs used by MMUbiPred.
+    Sample-dependent gates and a residual projection combine the three views.
+    """
+
+    branch_names = ("esm2", "local_motif", "aaindex")
+    diagnostic_name = "branch_gates"
+    alphabet = "ARNDCQEGHILKMFPSTWYV-"
+
+    def __init__(
+        self,
+        aaindex_lookup: np.ndarray | torch.Tensor,
+        backbone: nn.Module,
+        residue_token_lookup: Sequence[int],
+        cls_token_id: int,
+        eos_token_id: int,
+        pad_token_id: int,
+        window_size: int = 49,
+        branch_dim: int = 128,
+        conv_channels: int = 32,
+        conv_kernels: Sequence[int] = (3, 5, 7),
+        conv_dilations: Sequence[int] = (1, 2, 3),
+        dropout: float = 0.25,
+        freeze_backbone: bool = True,
+        unfreeze_last_n_layers: int = 0,
+    ) -> None:
+        super().__init__()
+        if window_size % 2 == 0:
+            raise ValueError("window_size must be odd")
+        if len(conv_kernels) != len(conv_dilations) or not conv_kernels:
+            raise ValueError("conv_kernels and conv_dilations must have equal length")
+        if any(kernel % 2 == 0 for kernel in conv_kernels):
+            raise ValueError("All convolution kernels must be odd")
+        if any(dilation <= 0 for dilation in conv_dilations):
+            raise ValueError("All convolution dilations must be positive")
+        if branch_dim <= 0 or conv_channels <= 0:
+            raise ValueError("branch_dim and conv_channels must be positive")
+        if unfreeze_last_n_layers < 0:
+            raise ValueError("unfreeze_last_n_layers cannot be negative")
+
+        aaindex_tensor = torch.as_tensor(aaindex_lookup, dtype=torch.float32)
+        if tuple(aaindex_tensor.shape) != (21, 31):
+            raise ValueError(
+                f"Expected AAindex lookup shape (21, 31), got {aaindex_tensor.shape}"
+            )
+        residue_ids = torch.as_tensor(residue_token_lookup, dtype=torch.long)
+        if tuple(residue_ids.shape) != (21,):
+            raise ValueError(
+                "residue_token_lookup must contain the 20 amino acids and padding"
+            )
+
+        hidden_size = int(getattr(getattr(backbone, "config", None), "hidden_size", 0))
+        if hidden_size <= 0:
+            raise ValueError("backbone.config.hidden_size must be a positive integer")
+
+        self.window_size = window_size
+        self.center_index = window_size // 2
+        self.padding_index = 20
+        self.cls_token_id = int(cls_token_id)
+        self.eos_token_id = int(eos_token_id)
+        self.pad_token_id = int(pad_token_id)
+        self.esm_backbone = backbone
+        self.register_buffer("residue_token_lookup", residue_ids, persistent=True)
+
+        for parameter in self.esm_backbone.parameters():
+            parameter.requires_grad = not freeze_backbone
+        if freeze_backbone and unfreeze_last_n_layers:
+            encoder = getattr(self.esm_backbone, "encoder", None)
+            layers = getattr(encoder, "layer", None)
+            if layers is None:
+                raise ValueError(
+                    "Cannot unfreeze layers: backbone has no encoder.layer collection"
+                )
+            if unfreeze_last_n_layers > len(layers):
+                raise ValueError(
+                    "unfreeze_last_n_layers exceeds the number of backbone layers"
+                )
+            for layer in layers[-unfreeze_last_n_layers:]:
+                for parameter in layer.parameters():
+                    parameter.requires_grad = True
+
+        self.esm_projection = nn.Sequential(
+            nn.Linear(hidden_size * 2, branch_dim),
+            nn.LayerNorm(branch_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+
+        self.local_convolutions = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Conv1d(
+                        20,
+                        conv_channels,
+                        kernel_size=kernel,
+                        dilation=dilation,
+                        padding=dilation * (kernel // 2),
+                        bias=False,
+                    ),
+                    nn.BatchNorm1d(conv_channels),
+                    nn.GELU(),
+                )
+                for kernel, dilation in zip(conv_kernels, conv_dilations)
+            ]
+        )
+        local_channels = conv_channels * len(conv_kernels)
+        self.local_residual = ResidualConvBlock(local_channels, dropout=dropout)
+        self.local_projection = nn.Sequential(
+            nn.Linear(local_channels * 2, branch_dim),
+            nn.LayerNorm(branch_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+
+        self.aaindex_embedding = nn.Embedding.from_pretrained(
+            aaindex_tensor,
+            freeze=True,
+            padding_idx=self.padding_index,
+        )
+        self.aaindex_projection = nn.Sequential(
+            nn.Linear(31 * 2, branch_dim),
+            nn.LayerNorm(branch_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(branch_dim, branch_dim),
+            nn.LayerNorm(branch_dim),
+            nn.GELU(),
+        )
+
+        concatenated_dim = branch_dim * len(self.branch_names)
+        self.gate = nn.Sequential(
+            nn.Linear(concatenated_dim, branch_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(branch_dim, len(self.branch_names)),
+        )
+        self.residual_fusion = nn.Linear(concatenated_dim, branch_dim)
+        self.fusion_norm = nn.LayerNorm(branch_dim)
+        self.classifier = nn.Sequential(
+            nn.Linear(branch_dim, branch_dim // 2),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(branch_dim // 2, 1),
+        )
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        aaindex_lookup: np.ndarray | torch.Tensor,
+        pretrained_model_name: str,
+        **kwargs: object,
+    ) -> "ESM2CrossFusion":
+        try:
+            from transformers import AutoModel, AutoTokenizer
+        except ImportError as error:
+            raise ImportError(
+                "ESM2CrossFusion requires transformers; install "
+                "experiment/requirements-colab.txt"
+            ) from error
+
+        tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name)
+        backbone = AutoModel.from_pretrained(pretrained_model_name)
+        special_ids = {
+            "cls_token_id": tokenizer.cls_token_id,
+            "eos_token_id": tokenizer.eos_token_id,
+            "pad_token_id": tokenizer.pad_token_id,
+        }
+        if any(value is None for value in special_ids.values()):
+            raise ValueError("The selected tokenizer is missing CLS, EOS, or PAD IDs")
+
+        residue_ids = [
+            int(tokenizer.convert_tokens_to_ids(residue))
+            for residue in cls.alphabet[:-1]
+        ]
+        if tokenizer.unk_token_id is not None and any(
+            token_id == tokenizer.unk_token_id for token_id in residue_ids
+        ):
+            raise ValueError("The selected tokenizer does not support the canonical alphabet")
+        residue_ids.append(int(tokenizer.pad_token_id))
+        return cls(
+            aaindex_lookup=aaindex_lookup,
+            backbone=backbone,
+            residue_token_lookup=residue_ids,
+            **special_ids,
+            **kwargs,
+        )
+
+    @staticmethod
+    def _masked_mean(features: torch.Tensor, valid_mask: torch.Tensor) -> torch.Tensor:
+        weights = valid_mask.unsqueeze(-1).to(features.dtype)
+        return (features * weights).sum(dim=1) / weights.sum(dim=1).clamp_min(1.0)
+
+    def _esm_inputs(
+        self, tokens: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Remove terminal gap tokens and return ESM IDs, masks, and site positions."""
+
+        valid_mask = tokens.ne(self.padding_index)
+        lengths = valid_mask.sum(dim=1)
+        if torch.any(lengths == 0):
+            raise ValueError("Every sequence window must contain at least one residue")
+        if torch.any(~valid_mask[:, self.center_index]):
+            raise ValueError("The central candidate site cannot be padding")
+
+        batch_size = tokens.shape[0]
+        esm_ids = torch.full(
+            (batch_size, self.window_size + 2),
+            self.pad_token_id,
+            dtype=torch.long,
+            device=tokens.device,
+        )
+        attention_mask = torch.zeros_like(esm_ids)
+        esm_ids[:, 0] = self.cls_token_id
+        attention_mask[:, 0] = 1
+
+        compact_positions = valid_mask.cumsum(dim=1)
+        batch_indices = torch.arange(batch_size, device=tokens.device).unsqueeze(1)
+        batch_indices = batch_indices.expand_as(tokens)[valid_mask]
+        residue_positions = compact_positions[valid_mask]
+        mapped_tokens = self.residue_token_lookup[tokens[valid_mask]]
+        esm_ids[batch_indices, residue_positions] = mapped_tokens
+        attention_mask[batch_indices, residue_positions] = 1
+
+        eos_positions = lengths + 1
+        esm_ids[torch.arange(batch_size, device=tokens.device), eos_positions] = (
+            self.eos_token_id
+        )
+        attention_mask[
+            torch.arange(batch_size, device=tokens.device), eos_positions
+        ] = 1
+        center_positions = valid_mask[:, : self.center_index].sum(dim=1) + 1
+        return esm_ids, attention_mask, center_positions
+
+    def train(self, mode: bool = True) -> "ESM2CrossFusion":
+        super().train(mode)
+        if not any(parameter.requires_grad for parameter in self.esm_backbone.parameters()):
+            self.esm_backbone.eval()
+        return self
+
+    def forward(
+        self, tokens: torch.Tensor, return_gates: bool = False
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        if tokens.ndim != 2 or tokens.shape[1] != self.window_size:
+            raise ValueError(
+                f"Expected token shape (batch, {self.window_size}), got {tokens.shape}"
+            )
+
+        valid_mask = tokens.ne(self.padding_index)
+        esm_ids, attention_mask, center_positions = self._esm_inputs(tokens)
+        backbone_trainable = any(
+            parameter.requires_grad for parameter in self.esm_backbone.parameters()
+        )
+        with torch.set_grad_enabled(self.training and backbone_trainable):
+            esm_features = self.esm_backbone(
+                input_ids=esm_ids,
+                attention_mask=attention_mask,
+            ).last_hidden_state
+        batch_indices = torch.arange(tokens.shape[0], device=tokens.device)
+        residue_features = esm_features[:, 1 : self.window_size + 1, :]
+        compact_lengths = valid_mask.sum(dim=1, keepdim=True)
+        compact_positions = torch.arange(
+            1, self.window_size + 1, device=tokens.device
+        ).unsqueeze(0)
+        compact_valid_mask = compact_positions <= compact_lengths
+        esm_vector = self.esm_projection(
+            torch.cat(
+                [
+                    esm_features[batch_indices, center_positions],
+                    self._masked_mean(residue_features, compact_valid_mask),
+                ],
+                dim=-1,
+            )
+        )
+
+        one_hot = F.one_hot(tokens, num_classes=21)[..., :20].to(esm_vector.dtype)
+        one_hot = one_hot.transpose(1, 2)
+        local_features = torch.cat(
+            [convolution(one_hot) for convolution in self.local_convolutions], dim=1
+        )
+        local_features = self.local_residual(local_features)
+        mask_1d = valid_mask.unsqueeze(1)
+        masked_local = local_features.masked_fill(~mask_1d, float("-inf"))
+        local_max = masked_local.amax(dim=-1)
+        local_mean = (
+            local_features * mask_1d.to(local_features.dtype)
+        ).sum(dim=-1) / valid_mask.sum(dim=1, keepdim=True).clamp_min(1)
+        local_vector = self.local_projection(torch.cat([local_max, local_mean], dim=-1))
+
+        aaindex = self.aaindex_embedding(tokens)
+        aaindex_vector = self.aaindex_projection(
+            torch.cat(
+                [
+                    aaindex[:, self.center_index, :],
+                    self._masked_mean(aaindex, valid_mask),
+                ],
+                dim=-1,
+            )
+        )
+
+        vectors = [esm_vector, local_vector, aaindex_vector]
+        concatenated = torch.cat(vectors, dim=-1)
+        gates = torch.softmax(self.gate(concatenated), dim=-1)
+        stacked = torch.stack(vectors, dim=1)
+        weighted = (stacked * gates.unsqueeze(-1)).sum(dim=1)
+        fused = self.fusion_norm(weighted + self.residual_fusion(concatenated))
+        logits = self.classifier(fused).squeeze(-1)
+        if return_gates:
+            return logits, gates
+        return logits
+
+
 class MMUbiPredCompatible(nn.Module):
     """PyTorch reimplementation of the released three-branch topology.
 
@@ -473,6 +788,23 @@ def build_model(
             aaindex_lookup=aaindex_lookup,
             window_size=window_size,
             l1_coefficient=float(model_config.get("l1_coefficient", 1e-4)),
+        )
+    if architecture == "esm2_crossfusion_v1":
+        return ESM2CrossFusion.from_pretrained(
+            aaindex_lookup=aaindex_lookup,
+            pretrained_model_name=str(model_config["pretrained_model_name"]),
+            window_size=window_size,
+            branch_dim=int(model_config["branch_dim"]),
+            conv_channels=int(model_config["conv_channels"]),
+            conv_kernels=tuple(int(value) for value in model_config["conv_kernels"]),
+            conv_dilations=tuple(
+                int(value) for value in model_config["conv_dilations"]
+            ),
+            dropout=float(model_config["dropout"]),
+            freeze_backbone=bool(model_config.get("freeze_backbone", True)),
+            unfreeze_last_n_layers=int(
+                model_config.get("unfreeze_last_n_layers", 0)
+            ),
         )
     if architecture != "ubifusion_v1":
         raise ValueError(f"Unknown architecture: {architecture}")

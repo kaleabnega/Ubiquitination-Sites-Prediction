@@ -20,7 +20,7 @@ The independent test set is locked. Architecture selection, early stopping,
 and threshold selection use only the released training data. The fixed 0.5
 threshold is always reported for direct comparison with MMUbiPred.
 
-## First proposed model: UbiFusionNet v1
+## Pilot model: UbiFusionNet v1
 
 UbiFusionNet v1 is an architecture-only experiment using the same three input
 sources as MMUbiPred:
@@ -34,8 +34,32 @@ score. A learned softmax gate fuses these representations before the final
 classifier. This directly tests whether feature-level, sample-dependent fusion
 is better than MMUbiPred's score-level fusion without adding labelled data.
 
-Protein-language-model, structure, and positive-unlabelled extensions belong
-in later experiments after this same-data architecture baseline is measured.
+The corrected three-seed validation benchmark rejected this pilot: its mean
+fixed-threshold MCC was 0.5167 versus 0.5639 for the stabilized compatible
+baseline. The independent test was not accessed. See
+[`results/2026-07-22-validation-pilot-v1`](results/2026-07-22-validation-pilot-v1/README.md).
+
+## Current candidate: ESM2-CrossFusion v1
+
+The next candidate combines contextual representations from the frozen
+`facebook/esm2_t6_8M_UR50D` protein language model with a dilated local-motif
+CNN and the paper's normalized AAindex properties. Three site-level vectors
+are combined by sample-dependent gates plus a residual fusion projection.
+
+The first run is deliberately a single-seed development-only screen. It is a
+go/no-go experiment, not an accepted result and not a test-set evaluation:
+
+```bash
+python experiment/scripts/run_validation_benchmark.py \
+  --suite experiment/configs/esm2_crossfusion_screen_v1.json
+```
+
+[Open the ESM2-CrossFusion screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/03_ESM2_CrossFusion_Screen_Colab.ipynb)
+
+If the candidate is competitive at seed 42, the next stage is a paired
+three-seed comparison against the already-preserved stabilized baseline. Only
+a candidate selected without seeing the independent test may proceed to the
+single locked-test evaluation.
 
 ## Layout
 
@@ -135,7 +159,7 @@ using training/validation data:
 
 ```bash
 python experiment/scripts/evaluate.py \
-  --run-dir experiment/outputs/ubifusion_v1_seed42 \
+  --run-dir experiment/outputs/SELECTED_FINAL_RUN \
   --data-dir replication/MMUbiPred \
   --allow-locked-test
 ```

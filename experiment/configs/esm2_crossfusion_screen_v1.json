@@ -1,0 +1,11 @@
+{
+  "benchmark_name": "esm2_crossfusion_screen_v1",
+  "reference_model": "esm2_crossfusion_v1",
+  "seeds": [42],
+  "models": [
+    {
+      "name": "esm2_crossfusion_v1",
+      "config": "experiment/configs/esm2_crossfusion_v1.json"
+    }
+  ]
+}
