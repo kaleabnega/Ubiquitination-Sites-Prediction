@@ -66,6 +66,11 @@ Training is intended for Google Colab. From the project root:
 
 [Open UbiFusionNet v1 in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/01_UbiFusionNet_v1_Colab.ipynb)
 
+For a private repository, add a fine-grained GitHub token with read-only access
+to this repository to the Colab Secrets panel as `GITHUB_TOKEN`, then enable
+notebook access to that secret. The notebook uses a temporary Git askpass
+helper, so the token is not embedded in the clone URL or saved Git remote.
+
 ```bash
 python experiment/scripts/train.py \
   --config experiment/configs/ubifusion_v1.json
