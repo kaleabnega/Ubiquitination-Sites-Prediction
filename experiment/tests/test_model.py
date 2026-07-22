@@ -3,7 +3,8 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 import torch
@@ -12,7 +13,12 @@ import torch
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "experiment" / "src"))
 
-from ubipred.model import ESM2CrossFusion, MMUbiPredCompatible, UbiFusionNet  # noqa: E402
+from ubipred.model import (  # noqa: E402
+    CenterLoRAESM2,
+    ESM2CrossFusion,
+    MMUbiPredCompatible,
+    UbiFusionNet,
+)
 
 
 class FakeESMBackbone(torch.nn.Module):
@@ -26,6 +32,28 @@ class FakeESMBackbone(torch.nn.Module):
     ) -> SimpleNamespace:
         del attention_mask
         return SimpleNamespace(last_hidden_state=self.embedding(input_ids))
+
+
+class FakeESMTokenizer:
+    cls_token_id = 1
+    eos_token_id = 2
+    pad_token_id = 0
+    unk_token_id = 3
+
+    @classmethod
+    def from_pretrained(cls, name: str) -> "FakeESMTokenizer":
+        del name
+        return cls()
+
+    def convert_tokens_to_ids(self, residue: str) -> int:
+        return 4 + CenterLoRAESM2.alphabet.index(residue)
+
+
+class FakeAutoModel:
+    @staticmethod
+    def from_pretrained(name: str, **kwargs: object) -> FakeESMBackbone:
+        del name, kwargs
+        return FakeESMBackbone(hidden_size=16)
 
 
 class ModelTests(unittest.TestCase):
@@ -141,6 +169,66 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(tuple(gates.shape), (2, 3))
         torch.testing.assert_close(gates.sum(dim=1), torch.ones(2))
         self.assertFalse(any(parameter.requires_grad for parameter in backbone.parameters()))
+
+    def test_center_lora_esm2_uses_candidate_residue(self) -> None:
+        backbone = FakeESMBackbone()
+        model = CenterLoRAESM2(
+            backbone=backbone,
+            backbone_hidden_size=16,
+            residue_token_lookup=list(range(4, 24)) + [0],
+            cls_token_id=1,
+            eos_token_id=2,
+            pad_token_id=0,
+            window_size=49,
+            classifier_hidden_dim=8,
+            dropout=0.0,
+        )
+        tokens = torch.full((3, 49), 20, dtype=torch.long)
+        tokens[:, 8:41] = 0
+        tokens[:, 24] = 11
+
+        esm_ids, attention_mask, center_positions = model._esm_inputs(tokens)
+        self.assertEqual(attention_mask.sum(dim=1).tolist(), [35, 35, 35])
+        self.assertEqual(center_positions.tolist(), [17, 17, 17])
+        self.assertEqual(esm_ids[:, 17].tolist(), [15, 15, 15])
+
+        logits, weights = model(tokens, return_gates=True)
+        self.assertEqual(tuple(logits.shape), (3,))
+        torch.testing.assert_close(weights, torch.ones((3, 1)))
+        logits.sum().backward()
+        self.assertIsNotNone(backbone.embedding.weight.grad)
+
+    def test_center_lora_factory_configures_feature_extraction_lora(self) -> None:
+        fake_peft = ModuleType("peft")
+        fake_peft.LoraConfig = lambda **kwargs: SimpleNamespace(**kwargs)
+
+        def attach_lora(backbone: FakeESMBackbone, config: SimpleNamespace):
+            backbone.lora_config = config
+            return backbone
+
+        fake_peft.get_peft_model = attach_lora
+        fake_transformers = ModuleType("transformers")
+        fake_transformers.AutoModel = FakeAutoModel
+        fake_transformers.AutoTokenizer = FakeESMTokenizer
+
+        with patch.dict(
+            sys.modules,
+            {"peft": fake_peft, "transformers": fake_transformers},
+        ):
+            model = CenterLoRAESM2.from_pretrained(
+                pretrained_model_name="fake-esm",
+                lora_rank=8,
+                lora_alpha=16,
+                lora_dropout=0.1,
+                lora_target_modules=("query", "value"),
+                window_size=49,
+                classifier_hidden_dim=8,
+                dropout=0.0,
+            )
+
+        self.assertEqual(model.esm_backbone.lora_config.task_type, "FEATURE_EXTRACTION")
+        self.assertEqual(model.esm_backbone.lora_config.target_modules, ["query", "value"])
+        self.assertEqual(model.esm_backbone.lora_config.r, 8)
 
 
 if __name__ == "__main__":

@@ -39,24 +39,36 @@ fixed-threshold MCC was 0.5167 versus 0.5639 for the stabilized compatible
 baseline. The independent test was not accessed. See
 [`results/2026-07-22-validation-pilot-v1`](results/2026-07-22-validation-pilot-v1/README.md).
 
-## Current candidate: ESM2-CrossFusion v1
+## Rejected screen: ESM2-CrossFusion v1
 
-The next candidate combines contextual representations from the frozen
+This candidate combined contextual representations from the frozen
 `facebook/esm2_t6_8M_UR50D` protein language model with a dilated local-motif
 CNN and the paper's normalized AAindex properties. Three site-level vectors
 are combined by sample-dependent gates plus a residual fusion projection.
 
-The first run is deliberately a single-seed development-only screen. It is a
-go/no-go experiment, not an accepted result and not a test-set evaluation:
+The seed-42 screen was rejected at fixed-threshold MCC 0.4981. Training loss
+continued to improve after validation MCC peaked, and the fusion gate was
+dominated by the frozen ESM branch. The independent test was not accessed. See
+[`results/2026-07-22-esm2-crossfusion-v1-screen`](results/2026-07-22-esm2-crossfusion-v1-screen/README.md).
+
+## Current candidate: CenterLoRA-ESM2 v1
+
+This ablation tests a single, sharper hypothesis: task adaptation of an
+intermediate ESM-2 model. Rank-8 LoRA adapters modify the query and value
+attention projections of `facebook/esm2_t12_35M_UR50D`, and a compact head
+classifies the representation at the central candidate lysine. It deliberately
+removes the CNN, AAindex, and learned branch gate.
+
+The first run is a single-seed development-only go/no-go screen:
 
 ```bash
 python experiment/scripts/run_validation_benchmark.py \
-  --suite experiment/configs/esm2_crossfusion_screen_v1.json
+  --suite experiment/configs/center_lora_esm2_screen_v1.json
 ```
 
-[Open the ESM2-CrossFusion screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/03_ESM2_CrossFusion_Screen_Colab.ipynb)
+[Open the CenterLoRA-ESM2 screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/04_CenterLoRA_ESM2_Screen_Colab.ipynb)
 
-If the candidate is competitive at seed 42, the next stage is a paired
+If fixed-threshold MCC is at least 0.56 at seed 42, the next stage is a paired
 three-seed comparison against the already-preserved stabilized baseline. Only
 a candidate selected without seeing the independent test may proceed to the
 single locked-test evaluation.

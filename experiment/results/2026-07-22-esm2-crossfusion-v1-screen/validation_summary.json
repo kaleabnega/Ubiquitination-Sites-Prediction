@@ -1,0 +1,37 @@
+{
+  "status": "rejected development-only screen",
+  "seed": 42,
+  "locked_test_accessed": false,
+  "development_selection": {
+    "best_epoch": 7,
+    "epochs_completed": 12,
+    "validation_mcc_at_0_5": 0.4981461254341343,
+    "validation_selected_threshold": 0.5249999999999999
+  },
+  "fixed_threshold": {
+    "threshold": 0.5,
+    "mcc": 0.4981461254341343,
+    "accuracy": 0.7455376578145407,
+    "sensitivity": 0.6545973228000878,
+    "specificity": 0.8350248326495358,
+    "auroc": 0.8360882124250011,
+    "auprc": 0.8524097072968165,
+    "confusion_matrix": [[3867, 764], [1574, 2983]]
+  },
+  "validation_selected_threshold": {
+    "threshold": 0.5249999999999999,
+    "mcc": 0.5039709333803362,
+    "accuracy": 0.7459730082716587,
+    "sensitivity": 0.63045863506693,
+    "specificity": 0.8596415461023537,
+    "auroc": 0.8360882124250011,
+    "auprc": 0.8524097072968165,
+    "confusion_matrix": [[3981, 650], [1684, 2873]]
+  },
+  "branch_names": ["esm2", "local_motif", "aaindex"],
+  "mean_branch_gates_at_best_epoch": [
+    0.8073212504386902,
+    0.06668776273727417,
+    0.12599025666713715
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "benchmark_name": "center_lora_esm2_screen_v1",
+  "reference_model": "center_lora_esm2_v1",
+  "seeds": [42],
+  "models": [
+    {
+      "name": "center_lora_esm2_v1",
+      "config": "experiment/configs/center_lora_esm2_v1.json"
+    }
+  ]
+}

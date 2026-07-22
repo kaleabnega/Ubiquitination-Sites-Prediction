@@ -151,7 +151,7 @@ def main() -> None:
         "python": sys.version,
         "packages": {
             name: package_version(name)
-            for name in ["numpy", "scikit-learn", "torch", "transformers"]
+            for name in ["numpy", "scikit-learn", "torch", "transformers", "peft"]
         },
         "preprocessing": {
             name: asdict(report) for name, report in preprocessing_reports.items()

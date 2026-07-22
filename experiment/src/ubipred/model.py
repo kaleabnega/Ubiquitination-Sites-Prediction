@@ -635,6 +635,181 @@ class ESM2CrossFusion(nn.Module):
         return logits
 
 
+class CenterLoRAESM2(nn.Module):
+    """Task-adapted ESM-2 classifier focused on the candidate lysine.
+
+    LoRA adapters are attached by :meth:`from_pretrained`; this module only
+    supplies the site-aware input conversion and a compact classification head.
+    It deliberately excludes the hand-crafted branches from ESM2-CrossFusion
+    so the experiment isolates the effect of task-adapting the protein model.
+    """
+
+    branch_names = ("esm2_center",)
+    diagnostic_name = "component_weights"
+    alphabet = "ARNDCQEGHILKMFPSTWYV-"
+
+    def __init__(
+        self,
+        backbone: nn.Module,
+        backbone_hidden_size: int,
+        residue_token_lookup: Sequence[int],
+        cls_token_id: int,
+        eos_token_id: int,
+        pad_token_id: int,
+        window_size: int = 49,
+        classifier_hidden_dim: int = 256,
+        dropout: float = 0.3,
+    ) -> None:
+        super().__init__()
+        if window_size % 2 == 0:
+            raise ValueError("window_size must be odd")
+        if backbone_hidden_size <= 0 or classifier_hidden_dim <= 0:
+            raise ValueError("hidden dimensions must be positive")
+        residue_ids = torch.as_tensor(residue_token_lookup, dtype=torch.long)
+        if tuple(residue_ids.shape) != (21,):
+            raise ValueError(
+                "residue_token_lookup must contain the 20 amino acids and padding"
+            )
+
+        self.window_size = window_size
+        self.center_index = window_size // 2
+        self.padding_index = 20
+        self.cls_token_id = int(cls_token_id)
+        self.eos_token_id = int(eos_token_id)
+        self.pad_token_id = int(pad_token_id)
+        self.esm_backbone = backbone
+        self.register_buffer("residue_token_lookup", residue_ids, persistent=True)
+        self.classifier = nn.Sequential(
+            nn.LayerNorm(backbone_hidden_size),
+            nn.Linear(backbone_hidden_size, classifier_hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(classifier_hidden_dim, 1),
+        )
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        pretrained_model_name: str,
+        lora_rank: int,
+        lora_alpha: int,
+        lora_dropout: float,
+        lora_target_modules: Sequence[str],
+        **kwargs: object,
+    ) -> "CenterLoRAESM2":
+        if lora_rank <= 0 or lora_alpha <= 0:
+            raise ValueError("LoRA rank and alpha must be positive")
+        if not lora_target_modules:
+            raise ValueError("At least one LoRA target module is required")
+        try:
+            from peft import LoraConfig, get_peft_model
+            from transformers import AutoModel, AutoTokenizer
+        except ImportError as error:
+            raise ImportError(
+                "CenterLoRAESM2 requires transformers and peft; install "
+                "experiment/requirements-colab.txt"
+            ) from error
+
+        tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name)
+        base_backbone = AutoModel.from_pretrained(
+            pretrained_model_name, add_pooling_layer=False
+        )
+        hidden_size = int(base_backbone.config.hidden_size)
+        lora_config = LoraConfig(
+            task_type="FEATURE_EXTRACTION",
+            r=int(lora_rank),
+            lora_alpha=int(lora_alpha),
+            lora_dropout=float(lora_dropout),
+            target_modules=[str(value) for value in lora_target_modules],
+            bias="none",
+        )
+        backbone = get_peft_model(base_backbone, lora_config)
+
+        special_ids = {
+            "cls_token_id": tokenizer.cls_token_id,
+            "eos_token_id": tokenizer.eos_token_id,
+            "pad_token_id": tokenizer.pad_token_id,
+        }
+        if any(value is None for value in special_ids.values()):
+            raise ValueError("The selected tokenizer is missing CLS, EOS, or PAD IDs")
+        residue_ids = [
+            int(tokenizer.convert_tokens_to_ids(residue))
+            for residue in cls.alphabet[:-1]
+        ]
+        if tokenizer.unk_token_id is not None and any(
+            token_id == tokenizer.unk_token_id for token_id in residue_ids
+        ):
+            raise ValueError("The selected tokenizer does not support the canonical alphabet")
+        residue_ids.append(int(tokenizer.pad_token_id))
+        return cls(
+            backbone=backbone,
+            backbone_hidden_size=hidden_size,
+            residue_token_lookup=residue_ids,
+            **special_ids,
+            **kwargs,
+        )
+
+    def _esm_inputs(
+        self, tokens: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        valid_mask = tokens.ne(self.padding_index)
+        lengths = valid_mask.sum(dim=1)
+        if torch.any(lengths == 0):
+            raise ValueError("Every sequence window must contain at least one residue")
+        if torch.any(~valid_mask[:, self.center_index]):
+            raise ValueError("The central candidate site cannot be padding")
+
+        batch_size = tokens.shape[0]
+        esm_ids = torch.full(
+            (batch_size, self.window_size + 2),
+            self.pad_token_id,
+            dtype=torch.long,
+            device=tokens.device,
+        )
+        attention_mask = torch.zeros_like(esm_ids)
+        esm_ids[:, 0] = self.cls_token_id
+        attention_mask[:, 0] = 1
+
+        compact_positions = valid_mask.cumsum(dim=1)
+        batch_indices = torch.arange(batch_size, device=tokens.device).unsqueeze(1)
+        batch_indices = batch_indices.expand_as(tokens)[valid_mask]
+        residue_positions = compact_positions[valid_mask]
+        esm_ids[batch_indices, residue_positions] = self.residue_token_lookup[
+            tokens[valid_mask]
+        ]
+        attention_mask[batch_indices, residue_positions] = 1
+
+        row_indices = torch.arange(batch_size, device=tokens.device)
+        eos_positions = lengths + 1
+        esm_ids[row_indices, eos_positions] = self.eos_token_id
+        attention_mask[row_indices, eos_positions] = 1
+        center_positions = valid_mask[:, : self.center_index].sum(dim=1) + 1
+        return esm_ids, attention_mask, center_positions
+
+    def forward(
+        self, tokens: torch.Tensor, return_gates: bool = False
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        if tokens.ndim != 2 or tokens.shape[1] != self.window_size:
+            raise ValueError(
+                f"Expected token shape (batch, {self.window_size}), got {tokens.shape}"
+            )
+        esm_ids, attention_mask, center_positions = self._esm_inputs(tokens)
+        features = self.esm_backbone(
+            input_ids=esm_ids,
+            attention_mask=attention_mask,
+        ).last_hidden_state
+        batch_indices = torch.arange(tokens.shape[0], device=tokens.device)
+        logits = self.classifier(
+            features[batch_indices, center_positions]
+        ).squeeze(-1)
+        if return_gates:
+            component_weights = torch.ones(
+                (tokens.shape[0], 1), dtype=logits.dtype, device=logits.device
+            )
+            return logits, component_weights
+        return logits
+
+
 class MMUbiPredCompatible(nn.Module):
     """PyTorch reimplementation of the released three-branch topology.
 
@@ -804,6 +979,19 @@ def build_model(
             freeze_backbone=bool(model_config.get("freeze_backbone", True)),
             unfreeze_last_n_layers=int(
                 model_config.get("unfreeze_last_n_layers", 0)
+            ),
+        )
+    if architecture == "center_lora_esm2_v1":
+        return CenterLoRAESM2.from_pretrained(
+            pretrained_model_name=str(model_config["pretrained_model_name"]),
+            window_size=window_size,
+            classifier_hidden_dim=int(model_config["classifier_hidden_dim"]),
+            dropout=float(model_config["dropout"]),
+            lora_rank=int(model_config["lora_rank"]),
+            lora_alpha=int(model_config["lora_alpha"]),
+            lora_dropout=float(model_config["lora_dropout"]),
+            lora_target_modules=tuple(
+                str(value) for value in model_config["lora_target_modules"]
             ),
         )
     if architecture != "ubifusion_v1":
