@@ -39,6 +39,18 @@ def mean_and_std(values: list[float]) -> dict[str, float]:
     }
 
 
+def is_collapsed_run(run: dict[str, object]) -> bool:
+    """Detect one-class predictions, including in legacy summaries."""
+
+    if bool(run.get("collapsed", False)):
+        return True
+    sensitivity = float(run["fixed_sensitivity"])
+    specificity = float(run["fixed_specificity"])
+    return (sensitivity == 1.0 and specificity == 0.0) or (
+        sensitivity == 0.0 and specificity == 1.0
+    )
+
+
 def portable_output_path(output_dir: Path) -> str:
     """Prefer a repository-relative path but support persistent external roots."""
 
@@ -154,11 +166,9 @@ def summarize(
         "collapsed_runs": [
             {"model": run["model"], "seed": run["seed"]}
             for run in runs
-            if bool(run.get("collapsed", False))
+            if is_collapsed_run(run)
         ],
-        "comparison_valid": not any(
-            bool(run.get("collapsed", False)) for run in runs
-        ),
+        "comparison_valid": not any(is_collapsed_run(run) for run in runs),
         "runs": runs,
         "aggregates": aggregates,
         "paired_differences": paired_differences,

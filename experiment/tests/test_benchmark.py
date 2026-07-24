@@ -76,6 +76,18 @@ class BenchmarkTests(unittest.TestCase):
             summary["collapsed_runs"], [{"model": "baseline", "seed": 1}]
         )
 
+    def test_legacy_one_class_run_without_flag_is_rejected(self) -> None:
+        collapsed = run_record("baseline", 123, 0.0)
+        collapsed.pop("collapsed")
+        collapsed["fixed_sensitivity"] = 1.0
+        collapsed["fixed_specificity"] = 0.0
+        candidate = run_record("candidate", 123, 0.5)
+        summary = benchmark.summarize("test", "baseline", [collapsed, candidate])
+        self.assertFalse(summary["comparison_valid"])
+        self.assertEqual(
+            summary["collapsed_runs"], [{"model": "baseline", "seed": 123}]
+        )
+
     def test_merge_selects_requested_model(self) -> None:
         payload = {
             "runs": [run_record("baseline", 1, 0.4), run_record("candidate", 1, 0.5)]
