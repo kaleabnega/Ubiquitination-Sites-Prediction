@@ -59,22 +59,27 @@ attention projections of `facebook/esm2_t12_35M_UR50D`, and a compact head
 classifies the representation at the central candidate lysine. It deliberately
 removes the CNN, AAindex, and learned branch gate.
 
-The first run is a single-seed development-only go/no-go screen:
+The early-stopped seed-42 screen passed its go criterion with fixed-threshold
+MCC 0.5689. The next stage reruns seed 42 and runs seeds 123 and 2026 for all
+15 epochs, while retaining the best development checkpoint:
 
 ```bash
 python experiment/scripts/run_validation_benchmark.py \
-  --suite experiment/configs/center_lora_esm2_screen_v1.json
+  --suite experiment/configs/center_lora_esm2_full15_three_seed_v1.json \
+  --resume
 ```
 
-[Open the CenterLoRA-ESM2 screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/04_CenterLoRA_ESM2_Screen_Colab.ipynb)
+[Open the full-15 three-seed benchmark in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/05_CenterLoRA_ESM2_Full15_ThreeSeed_Colab.ipynb)
 
 The notebook uninstalls Colab's incompatible optional `torchao 0.10.0` package
 after installing the pinned Transformers/PEFT versions. CenterLoRA does not use
 TorchAO or quantized weights.
 
-If fixed-threshold MCC is at least 0.56 at seed 42, the next stage is a paired
-three-seed comparison against the already-preserved stabilized baseline. Only
-a candidate selected without seeing the independent test may proceed to the
+The benchmark runner accepts `--output-root` for persistent Google Drive
+storage and `--resume` to reuse completed seeds after a runtime disconnection.
+The Colab notebook then merges the three candidate runs with the already
+preserved stabilized baseline and verifies identical split hashes. Only a
+candidate selected without seeing the independent test may proceed to the
 single locked-test evaluation.
 
 ## Layout

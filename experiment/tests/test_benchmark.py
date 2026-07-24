@@ -87,6 +87,17 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual(len(selected), 1)
         self.assertEqual(selected[0]["model"], "candidate")
 
+    def test_external_output_path_is_supported(self) -> None:
+        external = Path("/tmp") / "persistent-benchmark" / "seed_42"
+        self.assertEqual(benchmark.portable_output_path(external), str(external))
+
+    def test_repository_output_path_is_relative(self) -> None:
+        internal = PROJECT_ROOT / "experiment" / "outputs" / "seed_42"
+        self.assertEqual(
+            benchmark.portable_output_path(internal),
+            "experiment/outputs/seed_42",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

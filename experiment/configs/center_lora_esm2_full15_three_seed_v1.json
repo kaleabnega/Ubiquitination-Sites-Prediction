@@ -1,0 +1,11 @@
+{
+  "benchmark_name": "center_lora_esm2_full15_three_seed_v1",
+  "reference_model": "center_lora_esm2_full15_v1",
+  "seeds": [42, 123, 2026],
+  "models": [
+    {
+      "name": "center_lora_esm2_full15_v1",
+      "config": "experiment/configs/center_lora_esm2_full15_v1.json"
+    }
+  ]
+}

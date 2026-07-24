@@ -27,7 +27,7 @@ MMUbiPred result on the locked independent test set.
 | Development baseline | Stabilized MMUbiPred-compatible implementation | MCC `0.56389 ± 0.01116` | Reference across three development seeds |
 | Candidate 1 | UbiFusionNet v1 | MCC `0.51671 ± 0.00538` | Rejected on development data |
 | Candidate 2 | ESM2-CrossFusion v1 | MCC `0.49815`, seed 42 | Rejected on development data |
-| Current candidate | CenterLoRA-ESM2 v1 | Development-only seed-42 screen | In progress |
+| Current candidate | CenterLoRA-ESM2 v1 | Seed-42 MCC `0.56894`; three-seed confirmation pending | Competitive development screen |
 
 Candidate results above use protein-grouped development splits drawn only from
 the released training set. They are not independent-test results.
@@ -91,9 +91,10 @@ It uses:
 - the final representation of the central candidate lysine; and
 - a compact binary-classification head.
 
-The first screen uses seed 42 and never accesses the independent test. It
-proceeds to a three-seed comparison only if fixed-threshold development MCC is
-approximately `0.56` or higher.
+The first seed-42 screen reached fixed-threshold development MCC `0.56894`
+without accessing the independent test. The confirmatory protocol reruns seeds
+42, 123, and 2026 for all 15 epochs and retains each run's best development
+checkpoint.
 
 Read the complete
 [CenterLoRA-ESM2 method specification](experiment/methods/center_lora_esm2_v1.md).
@@ -123,9 +124,9 @@ experiments must not modify `replication/MMUbiPred`.
 
 ## Running the current experiment in Google Colab
 
-Training is designed for a Colab GPU runtime. Open:
+Training is designed for a Colab GPU runtime. The current workflow is:
 
-[04_CenterLoRA_ESM2_Screen_Colab.ipynb](experiment/notebooks/04_CenterLoRA_ESM2_Screen_Colab.ipynb)
+[05_CenterLoRA_ESM2_Full15_ThreeSeed_Colab.ipynb](experiment/notebooks/05_CenterLoRA_ESM2_Full15_ThreeSeed_Colab.ipynb)
 
 The notebook:
 

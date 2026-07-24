@@ -43,6 +43,24 @@ A passing screen is only permission to run seeds 42, 123, and 2026. It is not
 evidence of superiority by itself. A failing screen ends this version without
 test-set evaluation.
 
+## Full-15 three-seed protocol
+
+The early-stopped seed-42 screen passed its go criterion with fixed-threshold
+MCC 0.5689. The confirmatory development benchmark is versioned separately as
+`center_lora_esm2_full15_v1`:
+
+- seeds 42, 123, and 2026 each train for all 15 epochs;
+- early-stopping patience equals the 15-epoch maximum, so it cannot terminate
+  a run early;
+- the best checkpoint by development MCC at threshold 0.5 is still retained;
+- every run uses the same protein-grouped split rule and seed as the stabilized
+  compatible baseline; and
+- the independent test remains locked.
+
+Running every epoch provides complete learning curves. Retaining the best
+development checkpoint avoids knowingly selecting an overfitted epoch merely
+because it was last.
+
 ## External-pretraining disclosure
 
 The labelled comparison uses the authors' exact released train/test split, but

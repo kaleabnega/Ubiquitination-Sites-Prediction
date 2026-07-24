@@ -39,6 +39,15 @@ def mean_and_std(values: list[float]) -> dict[str, float]:
     }
 
 
+def portable_output_path(output_dir: Path) -> str:
+    """Prefer a repository-relative path but support persistent external roots."""
+
+    try:
+        return str(output_dir.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(output_dir)
+
+
 def flatten_run(
     model_name: str,
     seed: int,
@@ -64,7 +73,7 @@ def flatten_run(
     return {
         "model": model_name,
         "seed": seed,
-        "output_dir": str(output_dir.relative_to(PROJECT_ROOT)),
+        "output_dir": portable_output_path(output_dir),
         "validation_indices_sha256": split["validation_indices_sha256"],
         "best_epoch": development["best_epoch"],
         "collapsed": collapsed,
@@ -186,6 +195,11 @@ def main() -> None:
         action="store_true",
         help="Reuse a completed run directory instead of retraining it.",
     )
+    parser.add_argument(
+        "--output-root",
+        type=Path,
+        help="Override the suite output root, including with a Google Drive path.",
+    )
     args = parser.parse_args()
 
     suite_path = resolve_project_path(args.suite)
@@ -194,10 +208,14 @@ def main() -> None:
     reference_model = str(suite["reference_model"])
     seeds = [int(seed) for seed in suite["seeds"]]
     models = list(suite["models"])
-    output_root = resolve_project_path(
-        suite.get(
-            "output_root",
-            f"experiment/outputs/benchmarks/{benchmark_name}",
+    output_root = (
+        resolve_project_path(args.output_root)
+        if args.output_root is not None
+        else resolve_project_path(
+            suite.get(
+                "output_root",
+                f"experiment/outputs/benchmarks/{benchmark_name}",
+            )
         )
     )
     output_root.mkdir(parents=True, exist_ok=True)
