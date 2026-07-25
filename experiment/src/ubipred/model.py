@@ -695,6 +695,8 @@ class CenterLoRAESM2(nn.Module):
         lora_alpha: int,
         lora_dropout: float,
         lora_target_modules: Sequence[str],
+        gradient_checkpointing: bool = False,
+        tokenizer_do_lower_case: bool | None = None,
         **kwargs: object,
     ) -> "CenterLoRAESM2":
         if lora_rank <= 0 or lora_alpha <= 0:
@@ -710,10 +712,29 @@ class CenterLoRAESM2(nn.Module):
                 "experiment/requirements-colab.txt"
             ) from error
 
-        tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name)
+        tokenizer_kwargs = {}
+        if tokenizer_do_lower_case is not None:
+            tokenizer_kwargs["do_lower_case"] = bool(tokenizer_do_lower_case)
+        tokenizer = AutoTokenizer.from_pretrained(
+            pretrained_model_name, **tokenizer_kwargs
+        )
         base_backbone = AutoModel.from_pretrained(
             pretrained_model_name, add_pooling_layer=False
         )
+        if gradient_checkpointing:
+            gradient_checkpointing_enable = getattr(
+                base_backbone, "gradient_checkpointing_enable", None
+            )
+            enable_input_require_grads = getattr(
+                base_backbone, "enable_input_require_grads", None
+            )
+            if not callable(gradient_checkpointing_enable):
+                raise ValueError(
+                    "The selected backbone does not support gradient checkpointing"
+                )
+            gradient_checkpointing_enable()
+            if callable(enable_input_require_grads):
+                enable_input_require_grads()
         hidden_size = int(base_backbone.config.hidden_size)
         lora_config = LoraConfig(
             task_type="FEATURE_EXTRACTION",
@@ -734,13 +755,18 @@ class CenterLoRAESM2(nn.Module):
                 ) from error
             raise
 
+        end_token_id = tokenizer.eos_token_id
+        if end_token_id is None:
+            end_token_id = getattr(tokenizer, "sep_token_id", None)
         special_ids = {
             "cls_token_id": tokenizer.cls_token_id,
-            "eos_token_id": tokenizer.eos_token_id,
+            "eos_token_id": end_token_id,
             "pad_token_id": tokenizer.pad_token_id,
         }
         if any(value is None for value in special_ids.values()):
-            raise ValueError("The selected tokenizer is missing CLS, EOS, or PAD IDs")
+            raise ValueError(
+                "The selected tokenizer is missing CLS, end/SEP, or PAD IDs"
+            )
         residue_ids = [
             int(tokenizer.convert_tokens_to_ids(residue))
             for residue in cls.alphabet[:-1]
@@ -817,6 +843,12 @@ class CenterLoRAESM2(nn.Module):
             )
             return logits, component_weights
         return logits
+
+
+class CenterLoRAProtBERT(CenterLoRAESM2):
+    """ProtBERT-BFD backbone with the unchanged v1 central-residue head."""
+
+    branch_names = ("protbert_center",)
 
 
 class MultiScaleCenterLoRAESM2(CenterLoRAESM2):
@@ -1121,6 +1153,25 @@ def build_model(
             lora_dropout=float(model_config["lora_dropout"]),
             lora_target_modules=tuple(
                 str(value) for value in model_config["lora_target_modules"]
+            ),
+        )
+    if architecture == "center_lora_protbert_v1":
+        return CenterLoRAProtBERT.from_pretrained(
+            pretrained_model_name=str(model_config["pretrained_model_name"]),
+            window_size=window_size,
+            classifier_hidden_dim=int(model_config["classifier_hidden_dim"]),
+            dropout=float(model_config["dropout"]),
+            lora_rank=int(model_config["lora_rank"]),
+            lora_alpha=int(model_config["lora_alpha"]),
+            lora_dropout=float(model_config["lora_dropout"]),
+            lora_target_modules=tuple(
+                str(value) for value in model_config["lora_target_modules"]
+            ),
+            gradient_checkpointing=bool(
+                model_config.get("gradient_checkpointing", False)
+            ),
+            tokenizer_do_lower_case=bool(
+                model_config.get("tokenizer_do_lower_case", False)
             ),
         )
     if architecture == "center_lora_esm2_multiscale_v2":

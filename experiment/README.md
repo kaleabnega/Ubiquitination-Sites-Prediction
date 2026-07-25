@@ -111,6 +111,28 @@ of mean fusion weight but did not improve discrimination. V2 was therefore
 stopped without additional seeds or test access. See the
 [`frozen screen result`](results/2026-07-26-center-lora-esm2-multiscale-v2-screen/README.md).
 
+## Final backbone screen: CenterLoRA-ProtBERT v1
+
+This experiment changes only the pretrained backbone of CenterLoRA v1 from
+ESM-2 35M to `Rostlab/prot_bert_bfd`. The central-residue head, rank-8 LoRA
+protocol, seed-42 protein-grouped split, full 15-epoch schedule, optimizer, and
+effective batch size remain fixed.
+
+ProtBERT-BFD is much larger, so the physical batch is 16 with eight-step
+gradient accumulation, preserving an effective batch of 128. Gradient
+checkpointing controls activation memory. Lightweight trainable-state and RNG
+checkpoints are written after each epoch so a Drive-backed Colab run can resume
+without repeating completed epochs.
+
+The fixed screen contract is documented in
+[`methods/center_lora_protbert_v1.md`](methods/center_lora_protbert_v1.md).
+ProtBERT must improve fixed MCC over ESM-2 v1 by at least 0.005, preserve
+selected-threshold MCC, and satisfy the AUROC/AUPRC safeguards. Any failure
+retains ESM-2 v1 and closes architecture exploration. The independent test
+remains locked.
+
+[Open the CenterLoRA-ProtBERT v1 screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/07_CenterLoRA_ProtBERT_v1_Screen_Colab.ipynb)
+
 ## Layout
 
 ```text

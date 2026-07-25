@@ -29,6 +29,7 @@ MMUbiPred result on the locked independent test set.
 | Candidate 2 | ESM2-CrossFusion v1 | MCC `0.49815`, seed 42 | Rejected on development data |
 | Development champion | CenterLoRA-ESM2 v1 | MCC `0.56800 ± 0.00444` | Valid three-seed comparison |
 | Candidate 4 | MultiScale CenterLoRA-ESM2 v2 | MCC `0.57238`, seed 42 | Stopped by predeclared screen |
+| Final backbone screen | CenterLoRA-ProtBERT v1 | Seed 42 predeclared | Independent test locked |
 
 Candidate results above use protein-grouped development splits drawn only from
 the released training set. They are not independent-test results.
@@ -99,6 +100,12 @@ target, while AUROC, AUPRC, and selected-threshold MCC decreased. It was
 therefore stopped without additional seeds. The independent test remains
 locked.
 
+The final architecture-exploration experiment changes only the pretrained
+backbone from ESM-2 35M to ProtBERT-BFD while retaining the central-residue
+head and LoRA protocol. After its predeclared decision and any authorized
+paired confirmation, architecture selection closes before the independent
+test is accessed.
+
 Read the complete
 [CenterLoRA-ESM2 v1 method specification](experiment/methods/center_lora_esm2_v1.md)
 and the
@@ -131,7 +138,7 @@ experiments must not modify `replication/MMUbiPred`.
 
 Training is designed for a Colab GPU runtime. The current workflow is:
 
-[06_MultiScale_CenterLoRA_ESM2_v2_Screen_Colab.ipynb](experiment/notebooks/06_MultiScale_CenterLoRA_ESM2_v2_Screen_Colab.ipynb)
+[07_CenterLoRA_ProtBERT_v1_Screen_Colab.ipynb](experiment/notebooks/07_CenterLoRA_ProtBERT_v1_Screen_Colab.ipynb)
 
 The notebook:
 

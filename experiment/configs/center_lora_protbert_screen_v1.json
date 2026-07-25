@@ -1,0 +1,32 @@
+{
+  "experiment_name": "center_lora_protbert_v1",
+  "data_dir": "replication/MMUbiPred",
+  "output_dir": "experiment/outputs/center_lora_protbert_v1_seed42",
+  "seed": 42,
+  "window_size": 49,
+  "validation_fraction": 0.1,
+  "split_strategy": "protein_grouped",
+  "batch_size": 16,
+  "gradient_accumulation_steps": 8,
+  "num_workers": 0,
+  "epochs": 15,
+  "early_stopping_patience": 15,
+  "learning_rate": 0.0002,
+  "weight_decay": 0.0001,
+  "optimizer": "adamw",
+  "optimizer_epsilon": 1e-8,
+  "gradient_clip_norm": 1.0,
+  "use_amp": true,
+  "model": {
+    "architecture": "center_lora_protbert_v1",
+    "pretrained_model_name": "Rostlab/prot_bert_bfd",
+    "classifier_hidden_dim": 256,
+    "dropout": 0.3,
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.1,
+    "lora_target_modules": ["query", "value"],
+    "gradient_checkpointing": true,
+    "tokenizer_do_lower_case": false
+  }
+}

@@ -15,6 +15,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "experiment" / "src"))
 
 from ubipred.model import (  # noqa: E402
     CenterLoRAESM2,
+    CenterLoRAProtBERT,
     ESM2CrossFusion,
     MMUbiPredCompatible,
     MultiScaleCenterLoRAESM2,
@@ -28,6 +29,14 @@ class FakeESMBackbone(torch.nn.Module):
         super().__init__()
         self.config = SimpleNamespace(hidden_size=hidden_size)
         self.embedding = torch.nn.Embedding(32, hidden_size)
+        self.gradient_checkpointing_enabled = False
+        self.input_grads_enabled = False
+
+    def gradient_checkpointing_enable(self) -> None:
+        self.gradient_checkpointing_enabled = True
+
+    def enable_input_require_grads(self) -> None:
+        self.input_grads_enabled = True
 
     def forward(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor
@@ -49,6 +58,20 @@ class FakeESMTokenizer:
 
     def convert_tokens_to_ids(self, residue: str) -> int:
         return 4 + CenterLoRAESM2.alphabet.index(residue)
+
+
+class FakeProtBERTTokenizer(FakeESMTokenizer):
+    eos_token_id = None
+    sep_token_id = 2
+    received_kwargs: dict[str, object] = {}
+
+    @classmethod
+    def from_pretrained(
+        cls, name: str, **kwargs: object
+    ) -> "FakeProtBERTTokenizer":
+        del name
+        cls.received_kwargs = kwargs
+        return cls()
 
 
 class FakeAutoModel:
@@ -354,6 +377,84 @@ class ModelTests(unittest.TestCase):
             lora_alpha=16,
             lora_dropout=0.1,
             lora_target_modules=("query", "value"),
+        )
+
+    def test_protbert_factory_uses_sep_and_gradient_checkpointing(self) -> None:
+        fake_peft = ModuleType("peft")
+        fake_peft.LoraConfig = lambda **kwargs: SimpleNamespace(**kwargs)
+
+        def attach_lora(backbone: FakeESMBackbone, config: SimpleNamespace):
+            backbone.lora_config = config
+            return backbone
+
+        fake_peft.get_peft_model = attach_lora
+        fake_transformers = ModuleType("transformers")
+        fake_transformers.AutoModel = FakeAutoModel
+        fake_transformers.AutoTokenizer = FakeProtBERTTokenizer
+
+        with patch.dict(
+            sys.modules,
+            {"peft": fake_peft, "transformers": fake_transformers},
+        ):
+            model = CenterLoRAProtBERT.from_pretrained(
+                pretrained_model_name="fake-protbert",
+                lora_rank=8,
+                lora_alpha=16,
+                lora_dropout=0.1,
+                lora_target_modules=("query", "value"),
+                gradient_checkpointing=True,
+                tokenizer_do_lower_case=False,
+                window_size=49,
+                classifier_hidden_dim=8,
+                dropout=0.0,
+            )
+
+        self.assertIsInstance(model, CenterLoRAProtBERT)
+        self.assertEqual(model.eos_token_id, FakeProtBERTTokenizer.sep_token_id)
+        self.assertEqual(
+            FakeProtBERTTokenizer.received_kwargs, {"do_lower_case": False}
+        )
+        self.assertTrue(model.esm_backbone.gradient_checkpointing_enabled)
+        self.assertTrue(model.esm_backbone.input_grads_enabled)
+        self.assertEqual(model.branch_names, ("protbert_center",))
+
+    def test_protbert_build_model_routes_frozen_configuration(self) -> None:
+        model_config = {
+            "architecture": "center_lora_protbert_v1",
+            "pretrained_model_name": "Rostlab/prot_bert_bfd",
+            "classifier_hidden_dim": 256,
+            "dropout": 0.3,
+            "lora_rank": 8,
+            "lora_alpha": 16,
+            "lora_dropout": 0.1,
+            "lora_target_modules": ["query", "value"],
+            "gradient_checkpointing": True,
+            "tokenizer_do_lower_case": False,
+        }
+        sentinel = object()
+        with patch.object(
+            CenterLoRAProtBERT,
+            "from_pretrained",
+            return_value=sentinel,
+        ) as factory:
+            model = build_model(
+                aaindex_lookup=np.zeros((21, 31), dtype=np.float32),
+                window_size=49,
+                model_config=model_config,
+            )
+
+        self.assertIs(model, sentinel)
+        factory.assert_called_once_with(
+            pretrained_model_name="Rostlab/prot_bert_bfd",
+            window_size=49,
+            classifier_hidden_dim=256,
+            dropout=0.3,
+            lora_rank=8,
+            lora_alpha=16,
+            lora_dropout=0.1,
+            lora_target_modules=("query", "value"),
+            gradient_checkpointing=True,
+            tokenizer_do_lower_case=False,
         )
 
 

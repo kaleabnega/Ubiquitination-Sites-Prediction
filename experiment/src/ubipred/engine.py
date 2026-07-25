@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import copy
+import random
 import time
 from pathlib import Path
 
@@ -58,6 +58,43 @@ def _loss_with_regularization(
     return loss
 
 
+def _trainable_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
+    trainable_names = {
+        name for name, parameter in model.named_parameters() if parameter.requires_grad
+    }
+    return {
+        name: value.detach().cpu().clone()
+        for name, value in model.state_dict().items()
+        if name in trainable_names
+    }
+
+
+def _load_trainable_state(
+    model: nn.Module, state_dict: dict[str, torch.Tensor]
+) -> None:
+    incompatible = model.load_state_dict(state_dict, strict=False)
+    if incompatible.unexpected_keys:
+        raise RuntimeError(
+            f"Unexpected trainable checkpoint keys: {incompatible.unexpected_keys}"
+        )
+
+
+def _optimizer_step(
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scaler: torch.amp.GradScaler,
+    gradient_clip_norm: float | None,
+) -> None:
+    scaler.unscale_(optimizer)
+    if gradient_clip_norm is not None:
+        torch.nn.utils.clip_grad_norm_(
+            model.parameters(), max_norm=gradient_clip_norm
+        )
+    scaler.step(optimizer)
+    scaler.update()
+    optimizer.zero_grad(set_to_none=True)
+
+
 def predict(
     model: nn.Module,
     loader: DataLoader,
@@ -99,11 +136,20 @@ def train_model(
     optimizer_name: str,
     optimizer_epsilon: float,
     gradient_clip_norm: float | None,
+    gradient_accumulation_steps: int,
     use_amp: bool,
     checkpoint_metadata: dict[str, object],
+    resume: bool = False,
 ) -> dict[str, object]:
     if gradient_clip_norm is not None and gradient_clip_norm <= 0:
         raise ValueError("gradient_clip_norm must be positive or None")
+    if gradient_accumulation_steps <= 0:
+        raise ValueError("gradient_accumulation_steps must be positive")
+    if resume and bool(getattr(train_loader, "persistent_workers", False)):
+        raise ValueError(
+            "Exact epoch-boundary resume requires num_workers=0 so DataLoader "
+            "generator consumption is reproducible"
+        )
     run_dir = Path(output_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -125,31 +171,82 @@ def train_model(
     best_state: dict[str, torch.Tensor] | None = None
     best_threshold = 0.5
     epochs_without_improvement = 0
+    start_epoch = 1
+    resume_path = run_dir / "development_resume.pt"
 
-    for epoch in range(1, epochs + 1):
+    if resume and resume_path.exists():
+        resume_checkpoint = torch.load(
+            resume_path, map_location="cpu", weights_only=False
+        )
+        if resume_checkpoint["metadata"] != checkpoint_metadata:
+            raise ValueError(
+                "Resume checkpoint metadata does not match this code/configuration"
+            )
+        _load_trainable_state(model, resume_checkpoint["model_state_dict"])
+        optimizer.load_state_dict(resume_checkpoint["optimizer_state_dict"])
+        scaler.load_state_dict(resume_checkpoint["scaler_state_dict"])
+        history = list(resume_checkpoint["history"])
+        best_mcc = float(resume_checkpoint["best_mcc"])
+        best_epoch = int(resume_checkpoint["best_epoch"])
+        best_state = resume_checkpoint["best_model_state_dict"]
+        best_threshold = float(resume_checkpoint["best_threshold"])
+        epochs_without_improvement = int(
+            resume_checkpoint["epochs_without_improvement"]
+        )
+        start_epoch = int(resume_checkpoint["completed_epoch"]) + 1
+        random.setstate(resume_checkpoint["python_rng_state"])
+        np.random.set_state(resume_checkpoint["numpy_rng_state"])
+        torch.set_rng_state(resume_checkpoint["torch_rng_state"])
+        if torch.cuda.is_available() and resume_checkpoint["cuda_rng_states"]:
+            torch.cuda.set_rng_state_all(resume_checkpoint["cuda_rng_states"])
+        loader_generator = getattr(train_loader, "generator", None)
+        if (
+            loader_generator is not None
+            and resume_checkpoint["loader_generator_state"] is not None
+        ):
+            loader_generator.set_state(
+                resume_checkpoint["loader_generator_state"]
+            )
+        print(
+            f"resumed_after_epoch={start_epoch - 1:03d} "
+            f"best_epoch={best_epoch:03d}",
+            flush=True,
+        )
+
+    for epoch in range(start_epoch, epochs + 1):
         started = time.time()
         print(f"epoch={epoch:03d} started", flush=True)
         model.train()
         total_loss = 0.0
         total_examples = 0
+        optimizer.zero_grad(set_to_none=True)
+        batch_count = len(train_loader)
 
-        for batch in train_loader:
+        for batch_index, batch in enumerate(train_loader, start=1):
             tokens = batch["tokens"].to(device, non_blocking=True)
             labels = batch["label"].to(device, non_blocking=True)
-            optimizer.zero_grad(set_to_none=True)
+            group_start = (
+                (batch_index - 1) // gradient_accumulation_steps
+            ) * gradient_accumulation_steps
+            group_size = min(
+                gradient_accumulation_steps, batch_count - group_start
+            )
 
             with _autocast_context(device, enabled=amp_enabled):
                 logits = model(tokens)
                 loss = _loss_with_regularization(model, criterion, logits, labels)
 
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            if gradient_clip_norm is not None:
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), max_norm=gradient_clip_norm
+            scaler.scale(loss / group_size).backward()
+            if (
+                batch_index % gradient_accumulation_steps == 0
+                or batch_index == batch_count
+            ):
+                _optimizer_step(
+                    model=model,
+                    optimizer=optimizer,
+                    scaler=scaler,
+                    gradient_clip_norm=gradient_clip_norm,
                 )
-            scaler.step(optimizer)
-            scaler.update()
 
             batch_size = labels.shape[0]
             total_loss += float(loss.detach()) * batch_size
@@ -192,10 +289,11 @@ def train_model(
             best_mcc = current_mcc
             best_epoch = epoch
             best_threshold = selected_threshold
-            best_state = copy.deepcopy(model.state_dict())
+            best_state = _trainable_state_dict(model)
             epochs_without_improvement = 0
             checkpoint = {
                 "model_state_dict": best_state,
+                "state_dict_scope": "trainable_parameters",
                 "best_epoch": best_epoch,
                 "validation_mcc_at_0_5": best_mcc,
                 "validation_selected_threshold": best_threshold,
@@ -205,13 +303,40 @@ def train_model(
         else:
             epochs_without_improvement += 1
 
+        loader_generator = getattr(train_loader, "generator", None)
+        resume_checkpoint = {
+            "completed_epoch": epoch,
+            "model_state_dict": _trainable_state_dict(model),
+            "best_model_state_dict": best_state,
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scaler_state_dict": scaler.state_dict(),
+            "history": history,
+            "best_mcc": best_mcc,
+            "best_epoch": best_epoch,
+            "best_threshold": best_threshold,
+            "epochs_without_improvement": epochs_without_improvement,
+            "metadata": checkpoint_metadata,
+            "python_rng_state": random.getstate(),
+            "numpy_rng_state": np.random.get_state(),
+            "torch_rng_state": torch.get_rng_state(),
+            "cuda_rng_states": (
+                torch.cuda.get_rng_state_all() if torch.cuda.is_available() else []
+            ),
+            "loader_generator_state": (
+                loader_generator.get_state()
+                if loader_generator is not None
+                else None
+            ),
+        }
+        torch.save(resume_checkpoint, resume_path)
+
         if epochs_without_improvement >= patience:
             print(f"Early stopping after {epoch} epochs")
             break
 
     if best_state is None:
         raise RuntimeError("Training completed without a valid checkpoint")
-    model.load_state_dict(best_state)
+    _load_trainable_state(model, best_state)
 
     summary = {
         "best_epoch": best_epoch,
@@ -234,6 +359,7 @@ def refit_model(
     optimizer_name: str,
     optimizer_epsilon: float,
     gradient_clip_norm: float | None,
+    gradient_accumulation_steps: int,
     use_amp: bool,
     validation_selected_threshold: float,
     checkpoint_metadata: dict[str, object],
@@ -249,6 +375,8 @@ def refit_model(
         raise ValueError("epochs must be positive")
     if gradient_clip_norm is not None and gradient_clip_norm <= 0:
         raise ValueError("gradient_clip_norm must be positive or None")
+    if gradient_accumulation_steps <= 0:
+        raise ValueError("gradient_accumulation_steps must be positive")
 
     run_dir = Path(output_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -271,24 +399,34 @@ def refit_model(
         model.train()
         total_loss = 0.0
         total_examples = 0
+        optimizer.zero_grad(set_to_none=True)
+        batch_count = len(train_loader)
 
-        for batch in train_loader:
+        for batch_index, batch in enumerate(train_loader, start=1):
             tokens = batch["tokens"].to(device, non_blocking=True)
             labels = batch["label"].to(device, non_blocking=True)
-            optimizer.zero_grad(set_to_none=True)
+            group_start = (
+                (batch_index - 1) // gradient_accumulation_steps
+            ) * gradient_accumulation_steps
+            group_size = min(
+                gradient_accumulation_steps, batch_count - group_start
+            )
 
             with _autocast_context(device, enabled=amp_enabled):
                 logits = model(tokens)
                 loss = _loss_with_regularization(model, criterion, logits, labels)
 
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            if gradient_clip_norm is not None:
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), max_norm=gradient_clip_norm
+            scaler.scale(loss / group_size).backward()
+            if (
+                batch_index % gradient_accumulation_steps == 0
+                or batch_index == batch_count
+            ):
+                _optimizer_step(
+                    model=model,
+                    optimizer=optimizer,
+                    scaler=scaler,
+                    gradient_clip_norm=gradient_clip_norm,
                 )
-            scaler.step(optimizer)
-            scaler.update()
 
             batch_size = labels.shape[0]
             total_loss += float(loss.detach()) * batch_size
@@ -308,7 +446,10 @@ def refit_model(
         )
 
     checkpoint = {
-        "model_state_dict": copy.deepcopy(model.state_dict()),
+        "model_state_dict": {
+            name: value.detach().cpu().clone()
+            for name, value in model.state_dict().items()
+        },
         "best_epoch": epochs,
         "refit_epochs": epochs,
         "validation_selected_threshold": float(validation_selected_threshold),

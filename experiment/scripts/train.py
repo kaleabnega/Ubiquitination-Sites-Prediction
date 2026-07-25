@@ -78,6 +78,11 @@ def main() -> None:
         action="store_true",
         help="Select and report on development data without a full-data refit.",
     )
+    parser.add_argument(
+        "--resume-development",
+        action="store_true",
+        help="Resume an incomplete development run from its latest completed epoch.",
+    )
     args = parser.parse_args()
 
     config = json.loads(args.config.read_text(encoding="utf-8"))
@@ -196,6 +201,7 @@ def main() -> None:
 
     checkpoint_metadata = {
         "experiment_name": config["experiment_name"],
+        "seed": seed,
         "window_size": window_size,
         "model_config": config["model"],
         "aaindex_sha256": sha256(aaindex_path),
@@ -223,8 +229,12 @@ def main() -> None:
         optimizer_name=str(config.get("optimizer", "adamw")),
         optimizer_epsilon=float(config.get("optimizer_epsilon", 1e-8)),
         gradient_clip_norm=gradient_clip_norm,
+        gradient_accumulation_steps=int(
+            config.get("gradient_accumulation_steps", 1)
+        ),
         use_amp=bool(config["use_amp"]),
         checkpoint_metadata=checkpoint_metadata,
+        resume=args.resume_development,
     )
 
     labels, probabilities, indices, branch_diagnostics = predict(
@@ -314,6 +324,9 @@ def main() -> None:
         optimizer_name=str(config.get("optimizer", "adamw")),
         optimizer_epsilon=float(config.get("optimizer_epsilon", 1e-8)),
         gradient_clip_norm=gradient_clip_norm,
+        gradient_accumulation_steps=int(
+            config.get("gradient_accumulation_steps", 1)
+        ),
         use_amp=bool(config["use_amp"]),
         validation_selected_threshold=selected_threshold,
         checkpoint_metadata=checkpoint_metadata,
