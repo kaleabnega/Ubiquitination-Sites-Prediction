@@ -697,6 +697,7 @@ class CenterLoRAESM2(nn.Module):
         lora_target_modules: Sequence[str],
         gradient_checkpointing: bool = False,
         tokenizer_do_lower_case: bool | None = None,
+        tokenizer_use_fast: bool | None = None,
         **kwargs: object,
     ) -> "CenterLoRAESM2":
         if lora_rank <= 0 or lora_alpha <= 0:
@@ -715,6 +716,8 @@ class CenterLoRAESM2(nn.Module):
         tokenizer_kwargs = {}
         if tokenizer_do_lower_case is not None:
             tokenizer_kwargs["do_lower_case"] = bool(tokenizer_do_lower_case)
+        if tokenizer_use_fast is not None:
+            tokenizer_kwargs["use_fast"] = bool(tokenizer_use_fast)
         tokenizer = AutoTokenizer.from_pretrained(
             pretrained_model_name, **tokenizer_kwargs
         )
@@ -1172,6 +1175,9 @@ def build_model(
             ),
             tokenizer_do_lower_case=bool(
                 model_config.get("tokenizer_do_lower_case", False)
+            ),
+            tokenizer_use_fast=bool(
+                model_config.get("tokenizer_use_fast", False)
             ),
         )
     if architecture == "center_lora_esm2_multiscale_v2":

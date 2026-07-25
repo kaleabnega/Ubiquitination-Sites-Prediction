@@ -404,6 +404,7 @@ class ModelTests(unittest.TestCase):
                 lora_target_modules=("query", "value"),
                 gradient_checkpointing=True,
                 tokenizer_do_lower_case=False,
+                tokenizer_use_fast=False,
                 window_size=49,
                 classifier_hidden_dim=8,
                 dropout=0.0,
@@ -412,7 +413,8 @@ class ModelTests(unittest.TestCase):
         self.assertIsInstance(model, CenterLoRAProtBERT)
         self.assertEqual(model.eos_token_id, FakeProtBERTTokenizer.sep_token_id)
         self.assertEqual(
-            FakeProtBERTTokenizer.received_kwargs, {"do_lower_case": False}
+            FakeProtBERTTokenizer.received_kwargs,
+            {"do_lower_case": False, "use_fast": False},
         )
         self.assertTrue(model.esm_backbone.gradient_checkpointing_enabled)
         self.assertTrue(model.esm_backbone.input_grads_enabled)
@@ -430,6 +432,7 @@ class ModelTests(unittest.TestCase):
             "lora_target_modules": ["query", "value"],
             "gradient_checkpointing": True,
             "tokenizer_do_lower_case": False,
+            "tokenizer_use_fast": False,
         }
         sentinel = object()
         with patch.object(
@@ -455,6 +458,7 @@ class ModelTests(unittest.TestCase):
             lora_target_modules=("query", "value"),
             gradient_checkpointing=True,
             tokenizer_do_lower_case=False,
+            tokenizer_use_fast=False,
         )
 
 
