@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -60,25 +61,18 @@ class FakeESMTokenizer:
         return 4 + CenterLoRAESM2.alphabet.index(residue)
 
 
-class FakeProtBERTTokenizer(FakeESMTokenizer):
-    eos_token_id = None
-    sep_token_id = 2
-    received_kwargs: dict[str, object] = {}
-
-    @classmethod
-    def from_pretrained(
-        cls, name: str, **kwargs: object
-    ) -> "FakeProtBERTTokenizer":
-        del name
-        cls.received_kwargs = kwargs
-        return cls()
-
-
 class FakeAutoModel:
     @staticmethod
     def from_pretrained(name: str, **kwargs: object) -> FakeESMBackbone:
         del name, kwargs
         return FakeESMBackbone(hidden_size=16)
+
+
+class RejectAutoTokenizer:
+    @classmethod
+    def from_pretrained(cls, name: str, **kwargs: object) -> object:
+        del cls, name, kwargs
+        raise AssertionError("Direct vocabulary loading must bypass AutoTokenizer")
 
 
 class ModelTests(unittest.TestCase):
@@ -390,31 +384,53 @@ class ModelTests(unittest.TestCase):
         fake_peft.get_peft_model = attach_lora
         fake_transformers = ModuleType("transformers")
         fake_transformers.AutoModel = FakeAutoModel
-        fake_transformers.AutoTokenizer = FakeProtBERTTokenizer
+        fake_transformers.AutoTokenizer = RejectAutoTokenizer
+        fake_huggingface_hub = ModuleType("huggingface_hub")
 
-        with patch.dict(
-            sys.modules,
-            {"peft": fake_peft, "transformers": fake_transformers},
-        ):
-            model = CenterLoRAProtBERT.from_pretrained(
-                pretrained_model_name="fake-protbert",
-                lora_rank=8,
-                lora_alpha=16,
-                lora_dropout=0.1,
-                lora_target_modules=("query", "value"),
-                gradient_checkpointing=True,
-                tokenizer_do_lower_case=False,
-                tokenizer_use_fast=False,
-                window_size=49,
-                classifier_hidden_dim=8,
-                dropout=0.0,
+        with tempfile.TemporaryDirectory() as temporary:
+            vocabulary_path = Path(temporary) / "vocab.txt"
+            vocabulary_tokens = [
+                "[PAD]",
+                "[UNK]",
+                "[CLS]",
+                "[SEP]",
+                *CenterLoRAESM2.alphabet[:-1],
+            ]
+            vocabulary_path.write_text(
+                "\n".join(vocabulary_tokens) + "\n", encoding="utf-8"
+            )
+            fake_huggingface_hub.hf_hub_download = (
+                lambda **kwargs: str(vocabulary_path)
             )
 
+            with patch.dict(
+                sys.modules,
+                {
+                    "huggingface_hub": fake_huggingface_hub,
+                    "peft": fake_peft,
+                    "transformers": fake_transformers,
+                },
+            ):
+                model = CenterLoRAProtBERT.from_pretrained(
+                    pretrained_model_name="fake-protbert",
+                    lora_rank=8,
+                    lora_alpha=16,
+                    lora_dropout=0.1,
+                    lora_target_modules=("query", "value"),
+                    gradient_checkpointing=True,
+                    tokenizer_vocab_filename="vocab.txt",
+                    window_size=49,
+                    classifier_hidden_dim=8,
+                    dropout=0.0,
+                )
+
         self.assertIsInstance(model, CenterLoRAProtBERT)
-        self.assertEqual(model.eos_token_id, FakeProtBERTTokenizer.sep_token_id)
+        self.assertEqual(model.cls_token_id, vocabulary_tokens.index("[CLS]"))
+        self.assertEqual(model.eos_token_id, vocabulary_tokens.index("[SEP]"))
+        self.assertEqual(model.pad_token_id, vocabulary_tokens.index("[PAD]"))
         self.assertEqual(
-            FakeProtBERTTokenizer.received_kwargs,
-            {"do_lower_case": False, "use_fast": False},
+            model.residue_token_lookup[:-1].tolist(),
+            [vocabulary_tokens.index(residue) for residue in model.alphabet[:-1]],
         )
         self.assertTrue(model.esm_backbone.gradient_checkpointing_enabled)
         self.assertTrue(model.esm_backbone.input_grads_enabled)
@@ -431,8 +447,7 @@ class ModelTests(unittest.TestCase):
             "lora_dropout": 0.1,
             "lora_target_modules": ["query", "value"],
             "gradient_checkpointing": True,
-            "tokenizer_do_lower_case": False,
-            "tokenizer_use_fast": False,
+            "tokenizer_vocab_filename": "vocab.txt",
         }
         sentinel = object()
         with patch.object(
@@ -459,6 +474,7 @@ class ModelTests(unittest.TestCase):
             gradient_checkpointing=True,
             tokenizer_do_lower_case=False,
             tokenizer_use_fast=False,
+            tokenizer_vocab_filename="vocab.txt",
         )
 
 

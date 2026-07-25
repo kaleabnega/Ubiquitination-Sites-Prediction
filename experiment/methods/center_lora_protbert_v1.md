@@ -31,10 +31,11 @@ All task-specific choices are retained from CenterLoRA-ESM2 v1:
 
 ProtBERT uses CLS and SEP tokens instead of ESM's CLS and EOS convention. The
 implementation constructs the token IDs directly, excludes terminal padding,
-and verifies the compacted central-lysine position exactly as in v1. It loads
-ProtBERT's released slow WordPiece tokenizer explicitly (`use_fast=false`);
-this avoids an unsupported fast-tokenizer conversion and does not change token
-IDs or model inputs.
+and verifies the compacted central-lysine position exactly as in v1. It reads
+ProtBERT's released `vocab.txt` directly and validates every canonical residue
+plus PAD, UNK, CLS, and SEP. No Transformers tokenizer backend is instantiated,
+which avoids unsupported legacy-to-fast conversion while preserving the exact
+published token IDs.
 
 ## Memory and numerical protocol
 

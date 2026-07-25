@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Sequence
 
 import numpy as np
@@ -698,6 +699,7 @@ class CenterLoRAESM2(nn.Module):
         gradient_checkpointing: bool = False,
         tokenizer_do_lower_case: bool | None = None,
         tokenizer_use_fast: bool | None = None,
+        tokenizer_vocab_filename: str | None = None,
         **kwargs: object,
     ) -> "CenterLoRAESM2":
         if lora_rank <= 0 or lora_alpha <= 0:
@@ -713,14 +715,80 @@ class CenterLoRAESM2(nn.Module):
                 "experiment/requirements-colab.txt"
             ) from error
 
-        tokenizer_kwargs = {}
-        if tokenizer_do_lower_case is not None:
-            tokenizer_kwargs["do_lower_case"] = bool(tokenizer_do_lower_case)
-        if tokenizer_use_fast is not None:
-            tokenizer_kwargs["use_fast"] = bool(tokenizer_use_fast)
-        tokenizer = AutoTokenizer.from_pretrained(
-            pretrained_model_name, **tokenizer_kwargs
-        )
+        if tokenizer_vocab_filename is not None:
+            try:
+                from huggingface_hub import hf_hub_download
+            except ImportError as error:
+                raise ImportError(
+                    "Direct protein vocabulary loading requires huggingface_hub"
+                ) from error
+            vocabulary_path = hf_hub_download(
+                repo_id=pretrained_model_name,
+                filename=str(tokenizer_vocab_filename),
+            )
+            vocabulary_tokens = (
+                Path(vocabulary_path).read_text(encoding="utf-8").splitlines()
+            )
+            if len(vocabulary_tokens) != len(set(vocabulary_tokens)):
+                raise ValueError("The downloaded tokenizer vocabulary is not unique")
+            vocabulary = {
+                token: token_id
+                for token_id, token in enumerate(vocabulary_tokens)
+            }
+            required_tokens = {
+                "[PAD]",
+                "[UNK]",
+                "[CLS]",
+                "[SEP]",
+                *cls.alphabet[:-1],
+            }
+            missing_tokens = sorted(required_tokens - vocabulary.keys())
+            if missing_tokens:
+                raise ValueError(
+                    f"The downloaded tokenizer vocabulary is missing: {missing_tokens}"
+                )
+            special_ids = {
+                "cls_token_id": vocabulary["[CLS]"],
+                "eos_token_id": vocabulary["[SEP]"],
+                "pad_token_id": vocabulary["[PAD]"],
+            }
+            residue_ids = [
+                vocabulary[residue] for residue in cls.alphabet[:-1]
+            ]
+            residue_ids.append(vocabulary["[PAD]"])
+        else:
+            tokenizer_kwargs = {}
+            if tokenizer_do_lower_case is not None:
+                tokenizer_kwargs["do_lower_case"] = bool(tokenizer_do_lower_case)
+            if tokenizer_use_fast is not None:
+                tokenizer_kwargs["use_fast"] = bool(tokenizer_use_fast)
+            tokenizer = AutoTokenizer.from_pretrained(
+                pretrained_model_name, **tokenizer_kwargs
+            )
+            end_token_id = tokenizer.eos_token_id
+            if end_token_id is None:
+                end_token_id = getattr(tokenizer, "sep_token_id", None)
+            special_ids = {
+                "cls_token_id": tokenizer.cls_token_id,
+                "eos_token_id": end_token_id,
+                "pad_token_id": tokenizer.pad_token_id,
+            }
+            if any(value is None for value in special_ids.values()):
+                raise ValueError(
+                    "The selected tokenizer is missing CLS, end/SEP, or PAD IDs"
+                )
+            residue_ids = [
+                int(tokenizer.convert_tokens_to_ids(residue))
+                for residue in cls.alphabet[:-1]
+            ]
+            if tokenizer.unk_token_id is not None and any(
+                token_id == tokenizer.unk_token_id for token_id in residue_ids
+            ):
+                raise ValueError(
+                    "The selected tokenizer does not support the canonical alphabet"
+                )
+            residue_ids.append(int(tokenizer.pad_token_id))
+
         base_backbone = AutoModel.from_pretrained(
             pretrained_model_name, add_pooling_layer=False
         )
@@ -758,27 +826,6 @@ class CenterLoRAESM2(nn.Module):
                 ) from error
             raise
 
-        end_token_id = tokenizer.eos_token_id
-        if end_token_id is None:
-            end_token_id = getattr(tokenizer, "sep_token_id", None)
-        special_ids = {
-            "cls_token_id": tokenizer.cls_token_id,
-            "eos_token_id": end_token_id,
-            "pad_token_id": tokenizer.pad_token_id,
-        }
-        if any(value is None for value in special_ids.values()):
-            raise ValueError(
-                "The selected tokenizer is missing CLS, end/SEP, or PAD IDs"
-            )
-        residue_ids = [
-            int(tokenizer.convert_tokens_to_ids(residue))
-            for residue in cls.alphabet[:-1]
-        ]
-        if tokenizer.unk_token_id is not None and any(
-            token_id == tokenizer.unk_token_id for token_id in residue_ids
-        ):
-            raise ValueError("The selected tokenizer does not support the canonical alphabet")
-        residue_ids.append(int(tokenizer.pad_token_id))
         return cls(
             backbone=backbone,
             backbone_hidden_size=hidden_size,
@@ -1178,6 +1225,11 @@ def build_model(
             ),
             tokenizer_use_fast=bool(
                 model_config.get("tokenizer_use_fast", False)
+            ),
+            tokenizer_vocab_filename=(
+                str(model_config["tokenizer_vocab_filename"])
+                if model_config.get("tokenizer_vocab_filename") is not None
+                else None
             ),
         )
     if architecture == "center_lora_esm2_multiscale_v2":

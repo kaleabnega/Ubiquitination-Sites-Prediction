@@ -27,7 +27,6 @@
     "lora_dropout": 0.1,
     "lora_target_modules": ["query", "value"],
     "gradient_checkpointing": true,
-    "tokenizer_do_lower_case": false,
-    "tokenizer_use_fast": false
+    "tokenizer_vocab_filename": "vocab.txt"
   }
 }
