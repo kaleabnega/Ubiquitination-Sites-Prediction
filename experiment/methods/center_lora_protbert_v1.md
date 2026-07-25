@@ -37,6 +37,11 @@ plus PAD, UNK, CLS, and SEP. No Transformers tokenizer backend is instantiated,
 which avoids unsupported legacy-to-fast conversion while preserving the exact
 published token IDs.
 
+The released ProtBERT configuration predates the `model_type` field required
+by modern `AutoModel`. The implementation reads the released `config.json`
+directly into `BertConfig` and loads `BertModel` explicitly; model dimensions
+and pretrained weights still come from the released checkpoint.
+
 ## Memory and numerical protocol
 
 ProtBERT-BFD is substantially larger than ESM-2 35M. Gradient checkpointing

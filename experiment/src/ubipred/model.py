@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Sequence
 
@@ -700,6 +701,7 @@ class CenterLoRAESM2(nn.Module):
         tokenizer_do_lower_case: bool | None = None,
         tokenizer_use_fast: bool | None = None,
         tokenizer_vocab_filename: str | None = None,
+        backbone_model_type: str | None = None,
         **kwargs: object,
     ) -> "CenterLoRAESM2":
         if lora_rank <= 0 or lora_alpha <= 0:
@@ -789,9 +791,32 @@ class CenterLoRAESM2(nn.Module):
                 )
             residue_ids.append(int(tokenizer.pad_token_id))
 
-        base_backbone = AutoModel.from_pretrained(
-            pretrained_model_name, add_pooling_layer=False
-        )
+        if backbone_model_type is None:
+            base_backbone = AutoModel.from_pretrained(
+                pretrained_model_name, add_pooling_layer=False
+            )
+        elif backbone_model_type == "bert":
+            from transformers import BertConfig, BertModel
+
+            from huggingface_hub import hf_hub_download
+
+            configuration_path = hf_hub_download(
+                repo_id=pretrained_model_name,
+                filename="config.json",
+            )
+            configuration_values = json.loads(
+                Path(configuration_path).read_text(encoding="utf-8")
+            )
+            backbone_config = BertConfig.from_dict(configuration_values)
+            base_backbone = BertModel.from_pretrained(
+                pretrained_model_name,
+                config=backbone_config,
+                add_pooling_layer=False,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported explicit backbone model type: {backbone_model_type}"
+            )
         if gradient_checkpointing:
             gradient_checkpointing_enable = getattr(
                 base_backbone, "gradient_checkpointing_enable", None
@@ -1229,6 +1254,11 @@ def build_model(
             tokenizer_vocab_filename=(
                 str(model_config["tokenizer_vocab_filename"])
                 if model_config.get("tokenizer_vocab_filename") is not None
+                else None
+            ),
+            backbone_model_type=(
+                str(model_config["backbone_model_type"])
+                if model_config.get("backbone_model_type") is not None
                 else None
             ),
         )

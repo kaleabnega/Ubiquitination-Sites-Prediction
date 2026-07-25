@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -73,6 +74,29 @@ class RejectAutoTokenizer:
     def from_pretrained(cls, name: str, **kwargs: object) -> object:
         del cls, name, kwargs
         raise AssertionError("Direct vocabulary loading must bypass AutoTokenizer")
+
+
+class RejectAutoModel:
+    @classmethod
+    def from_pretrained(cls, name: str, **kwargs: object) -> object:
+        del cls, name, kwargs
+        raise AssertionError("Explicit BERT loading must bypass AutoModel")
+
+
+class FakeBertConfig:
+    @classmethod
+    def from_dict(cls, values: dict[str, object]) -> SimpleNamespace:
+        del cls
+        return SimpleNamespace(**values)
+
+
+class FakeBertModel:
+    @classmethod
+    def from_pretrained(
+        cls, name: str, config: SimpleNamespace, **kwargs: object
+    ) -> FakeESMBackbone:
+        del cls, name, kwargs
+        return FakeESMBackbone(hidden_size=config.hidden_size)
 
 
 class ModelTests(unittest.TestCase):
@@ -383,12 +407,15 @@ class ModelTests(unittest.TestCase):
 
         fake_peft.get_peft_model = attach_lora
         fake_transformers = ModuleType("transformers")
-        fake_transformers.AutoModel = FakeAutoModel
+        fake_transformers.AutoModel = RejectAutoModel
         fake_transformers.AutoTokenizer = RejectAutoTokenizer
+        fake_transformers.BertConfig = FakeBertConfig
+        fake_transformers.BertModel = FakeBertModel
         fake_huggingface_hub = ModuleType("huggingface_hub")
 
         with tempfile.TemporaryDirectory() as temporary:
             vocabulary_path = Path(temporary) / "vocab.txt"
+            configuration_path = Path(temporary) / "config.json"
             vocabulary_tokens = [
                 "[PAD]",
                 "[UNK]",
@@ -399,8 +426,15 @@ class ModelTests(unittest.TestCase):
             vocabulary_path.write_text(
                 "\n".join(vocabulary_tokens) + "\n", encoding="utf-8"
             )
+            configuration_path.write_text(
+                json.dumps({"hidden_size": 16}), encoding="utf-8"
+            )
             fake_huggingface_hub.hf_hub_download = (
-                lambda **kwargs: str(vocabulary_path)
+                lambda **kwargs: str(
+                    configuration_path
+                    if kwargs["filename"] == "config.json"
+                    else vocabulary_path
+                )
             )
 
             with patch.dict(
@@ -419,6 +453,7 @@ class ModelTests(unittest.TestCase):
                     lora_target_modules=("query", "value"),
                     gradient_checkpointing=True,
                     tokenizer_vocab_filename="vocab.txt",
+                    backbone_model_type="bert",
                     window_size=49,
                     classifier_hidden_dim=8,
                     dropout=0.0,
@@ -448,6 +483,7 @@ class ModelTests(unittest.TestCase):
             "lora_target_modules": ["query", "value"],
             "gradient_checkpointing": True,
             "tokenizer_vocab_filename": "vocab.txt",
+            "backbone_model_type": "bert",
         }
         sentinel = object()
         with patch.object(
@@ -475,6 +511,7 @@ class ModelTests(unittest.TestCase):
             tokenizer_do_lower_case=False,
             tokenizer_use_fast=False,
             tokenizer_vocab_filename="vocab.txt",
+            backbone_model_type="bert",
         )
 
 

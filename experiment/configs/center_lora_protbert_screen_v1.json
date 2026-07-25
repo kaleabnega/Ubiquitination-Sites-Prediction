@@ -27,6 +27,7 @@
     "lora_dropout": 0.1,
     "lora_target_modules": ["query", "value"],
     "gradient_checkpointing": true,
-    "tokenizer_vocab_filename": "vocab.txt"
+    "tokenizer_vocab_filename": "vocab.txt",
+    "backbone_model_type": "bert"
   }
 }
