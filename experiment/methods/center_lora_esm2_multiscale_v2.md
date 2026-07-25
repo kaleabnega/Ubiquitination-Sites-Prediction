@@ -55,3 +55,15 @@ The pooling radii are a single biologically motivated choice rather than a
 hyperparameter search. No alternative radii may be selected using the seed-42
 result. This restriction limits adaptation to one validation split and keeps
 the v1-to-v2 comparison interpretable.
+
+## Recorded outcome
+
+The seed-42 run completed all 15 epochs and selected epoch 6. Fixed MCC
+improved from 0.56894 to 0.57238, a gain of 0.00345 that did not reach the
+predeclared 0.005 target. AUROC, AUPRC, and selected-threshold MCC were lower
+than v1. The center, radius-2, and radius-5 components received mean weights of
+0.6070, 0.2210, and 0.1721, respectively, showing that the additional context
+was used but was not beneficial overall.
+
+The screen was classified as borderline and stopped. No additional seeds were
+run, and the independent test remained locked.

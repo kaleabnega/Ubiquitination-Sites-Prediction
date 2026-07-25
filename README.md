@@ -28,7 +28,7 @@ MMUbiPred result on the locked independent test set.
 | Candidate 1 | UbiFusionNet v1 | MCC `0.51671 ± 0.00538` | Rejected on development data |
 | Candidate 2 | ESM2-CrossFusion v1 | MCC `0.49815`, seed 42 | Rejected on development data |
 | Development champion | CenterLoRA-ESM2 v1 | MCC `0.56800 ± 0.00444` | Valid three-seed comparison |
-| Current screen | MultiScale CenterLoRA-ESM2 v2 | Seed 42 predeclared | Independent test locked |
+| Candidate 4 | MultiScale CenterLoRA-ESM2 v2 | MCC `0.57238`, seed 42 | Stopped by predeclared screen |
 
 Candidate results above use protein-grouped development splits drawn only from
 the released training set. They are not independent-test results.
@@ -80,26 +80,29 @@ the labelled train/test split is unchanged. Experiments using such models
 record this explicitly and will require a homology-aware robustness analysis
 before publication.
 
-## Current architecture screen
+## Current development champion
 
-**MultiScale CenterLoRA-ESM2 v2** tests whether explicit local contextual
-pooling improves the current v1 development champion.
+**CenterLoRA-ESM2 v1** remains the development champion. It uses:
 
-It uses:
-
-- `facebook/esm2_t12_35M_UR50D`;
+- the `facebook/esm2_t12_35M_UR50D` protein language model;
 - rank-8 LoRA adapters on attention query and value projections;
-- the final representation of the central candidate lysine;
-- masked contextual mean pools over radius-2 and radius-5 neighbourhoods; and
-- a shared projection plus sample-dependent softmax fusion gate.
+- the final contextual representation of the central candidate lysine; and
+- a compact 256-dimensional binary-classification head.
 
 V1 completed its full-15 three-seed comparison at fixed-threshold MCC
 `0.56800 ± 0.00444`, compared with `0.56389 ± 0.01116` for the stabilized
-baseline. V2 changes only the classification head and is first screened on the
-identical seed-42 split. The independent test remains locked.
+baseline.
+
+MultiScale v2 added radius-2 and radius-5 contextual mean pools. On seed 42,
+it improved fixed MCC over v1 by only `0.00345`, below the predeclared `0.005`
+target, while AUROC, AUPRC, and selected-threshold MCC decreased. It was
+therefore stopped without additional seeds. The independent test remains
+locked.
 
 Read the complete
-[MultiScale CenterLoRA-ESM2 v2 method specification](experiment/methods/center_lora_esm2_multiscale_v2.md).
+[CenterLoRA-ESM2 v1 method specification](experiment/methods/center_lora_esm2_v1.md)
+and the
+[MultiScale v2 screen result](experiment/results/2026-07-26-center-lora-esm2-multiscale-v2-screen/README.md).
 
 ## Repository layout
 

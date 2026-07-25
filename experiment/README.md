@@ -87,7 +87,7 @@ preserved stabilized baseline and verifies identical split hashes. Only a
 candidate selected without seeing the independent test may proceed to the
 single locked-test evaluation.
 
-## Current screen: MultiScale CenterLoRA-ESM2 v2
+## Stopped screen: MultiScale CenterLoRA-ESM2 v2
 
 V2 preserves the same ESM-2 backbone, LoRA adapters, optimizer, and full
 15-epoch schedule as v1. Its only controlled change is the classification
@@ -103,6 +103,13 @@ Details are frozen in
 The independent test remains locked.
 
 [Open the MultiScale CenterLoRA-ESM2 v2 screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/06_MultiScale_CenterLoRA_ESM2_v2_Screen_Colab.ipynb)
+
+The screen completed at fixed MCC 0.5724, a gain of 0.00345 over v1 seed 42.
+It missed the material-gain target, and its AUROC, AUPRC, and
+selected-threshold MCC were lower than v1. The contextual pools received 39.3%
+of mean fusion weight but did not improve discrimination. V2 was therefore
+stopped without additional seeds or test access. See the
+[`frozen screen result`](results/2026-07-26-center-lora-esm2-multiscale-v2-screen/README.md).
 
 ## Layout
 
