@@ -17,7 +17,9 @@ from ubipred.model import (  # noqa: E402
     CenterLoRAESM2,
     ESM2CrossFusion,
     MMUbiPredCompatible,
+    MultiScaleCenterLoRAESM2,
     UbiFusionNet,
+    build_model,
 )
 
 
@@ -225,10 +227,23 @@ class ModelTests(unittest.TestCase):
                 classifier_hidden_dim=8,
                 dropout=0.0,
             )
+            multiscale_model = MultiScaleCenterLoRAESM2.from_pretrained(
+                pretrained_model_name="fake-esm",
+                lora_rank=8,
+                lora_alpha=16,
+                lora_dropout=0.1,
+                lora_target_modules=("query", "value"),
+                window_size=49,
+                classifier_hidden_dim=8,
+                dropout=0.0,
+                pooling_radii=(2, 5),
+            )
 
         self.assertEqual(model.esm_backbone.lora_config.task_type, "FEATURE_EXTRACTION")
         self.assertEqual(model.esm_backbone.lora_config.target_modules, ["query", "value"])
         self.assertEqual(model.esm_backbone.lora_config.r, 8)
+        self.assertIsInstance(multiscale_model, MultiScaleCenterLoRAESM2)
+        self.assertEqual(multiscale_model.pooling_radii, (2, 5))
 
     def test_center_lora_factory_explains_incompatible_torchao(self) -> None:
         fake_peft = ModuleType("peft")
@@ -260,6 +275,86 @@ class ModelTests(unittest.TestCase):
                     classifier_hidden_dim=8,
                     dropout=0.0,
                 )
+
+    def test_multiscale_center_lora_fuses_masked_context(self) -> None:
+        backbone = FakeESMBackbone()
+        model = MultiScaleCenterLoRAESM2(
+            backbone=backbone,
+            backbone_hidden_size=16,
+            residue_token_lookup=list(range(4, 24)) + [0],
+            cls_token_id=1,
+            eos_token_id=2,
+            pad_token_id=0,
+            window_size=49,
+            classifier_hidden_dim=8,
+            dropout=0.0,
+            pooling_radii=(2, 5),
+        )
+        tokens = torch.full((3, 49), 20, dtype=torch.long)
+        tokens[0, 22:27] = 0
+        tokens[1, 19:30] = 0
+        tokens[2, 8:41] = 0
+        tokens[:, 24] = 11
+
+        logits, weights = model(tokens, return_gates=True)
+        self.assertEqual(tuple(logits.shape), (3,))
+        self.assertEqual(tuple(weights.shape), (3, 3))
+        self.assertEqual(
+            model.branch_names,
+            ("esm2_center", "esm2_radius_2", "esm2_radius_5"),
+        )
+        torch.testing.assert_close(weights.sum(dim=1), torch.ones(3))
+        logits.sum().backward()
+        self.assertIsNotNone(backbone.embedding.weight.grad)
+        self.assertIsNotNone(model.component_gate.weight.grad)
+
+    def test_multiscale_pool_excludes_special_and_padding_tokens(self) -> None:
+        features = torch.arange(7, dtype=torch.float32).view(1, 7, 1)
+        pooled = MultiScaleCenterLoRAESM2._centered_mean_pool(
+            features=features,
+            center_positions=torch.tensor([2]),
+            residue_lengths=torch.tensor([3]),
+            radius=2,
+        )
+        # Positions 1, 2, and 3 are residues; position 0 is CLS and 4 is EOS.
+        torch.testing.assert_close(pooled, torch.tensor([[2.0]]))
+
+    def test_multiscale_build_model_routes_frozen_configuration(self) -> None:
+        model_config = {
+            "architecture": "center_lora_esm2_multiscale_v2",
+            "pretrained_model_name": "fake-esm",
+            "classifier_hidden_dim": 256,
+            "dropout": 0.3,
+            "pooling_radii": [2, 5],
+            "lora_rank": 8,
+            "lora_alpha": 16,
+            "lora_dropout": 0.1,
+            "lora_target_modules": ["query", "value"],
+        }
+        sentinel = object()
+        with patch.object(
+            MultiScaleCenterLoRAESM2,
+            "from_pretrained",
+            return_value=sentinel,
+        ) as factory:
+            model = build_model(
+                aaindex_lookup=np.zeros((21, 31), dtype=np.float32),
+                window_size=49,
+                model_config=model_config,
+            )
+
+        self.assertIs(model, sentinel)
+        factory.assert_called_once_with(
+            pretrained_model_name="fake-esm",
+            window_size=49,
+            classifier_hidden_dim=256,
+            dropout=0.3,
+            pooling_radii=(2, 5),
+            lora_rank=8,
+            lora_alpha=16,
+            lora_dropout=0.1,
+            lora_target_modules=("query", "value"),
+        )
 
 
 if __name__ == "__main__":

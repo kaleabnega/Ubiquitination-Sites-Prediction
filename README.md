@@ -27,7 +27,8 @@ MMUbiPred result on the locked independent test set.
 | Development baseline | Stabilized MMUbiPred-compatible implementation | MCC `0.56389 ± 0.01116` | Reference across three development seeds |
 | Candidate 1 | UbiFusionNet v1 | MCC `0.51671 ± 0.00538` | Rejected on development data |
 | Candidate 2 | ESM2-CrossFusion v1 | MCC `0.49815`, seed 42 | Rejected on development data |
-| Current candidate | CenterLoRA-ESM2 v1 | Seed-42 MCC `0.56894`; three-seed confirmation pending | Competitive development screen |
+| Development champion | CenterLoRA-ESM2 v1 | MCC `0.56800 ± 0.00444` | Valid three-seed comparison |
+| Current screen | MultiScale CenterLoRA-ESM2 v2 | Seed 42 predeclared | Independent test locked |
 
 Candidate results above use protein-grouped development splits drawn only from
 the released training set. They are not independent-test results.
@@ -79,25 +80,26 @@ the labelled train/test split is unchanged. Experiments using such models
 record this explicitly and will require a homology-aware robustness analysis
 before publication.
 
-## Current architecture
+## Current architecture screen
 
-**CenterLoRA-ESM2 v1** tests whether task-specific adaptation is more effective
-than combining frozen embeddings with several hand-crafted branches.
+**MultiScale CenterLoRA-ESM2 v2** tests whether explicit local contextual
+pooling improves the current v1 development champion.
 
 It uses:
 
 - `facebook/esm2_t12_35M_UR50D`;
 - rank-8 LoRA adapters on attention query and value projections;
-- the final representation of the central candidate lysine; and
-- a compact binary-classification head.
+- the final representation of the central candidate lysine;
+- masked contextual mean pools over radius-2 and radius-5 neighbourhoods; and
+- a shared projection plus sample-dependent softmax fusion gate.
 
-The first seed-42 screen reached fixed-threshold development MCC `0.56894`
-without accessing the independent test. The confirmatory protocol reruns seeds
-42, 123, and 2026 for all 15 epochs and retains each run's best development
-checkpoint.
+V1 completed its full-15 three-seed comparison at fixed-threshold MCC
+`0.56800 ± 0.00444`, compared with `0.56389 ± 0.01116` for the stabilized
+baseline. V2 changes only the classification head and is first screened on the
+identical seed-42 split. The independent test remains locked.
 
 Read the complete
-[CenterLoRA-ESM2 method specification](experiment/methods/center_lora_esm2_v1.md).
+[MultiScale CenterLoRA-ESM2 v2 method specification](experiment/methods/center_lora_esm2_multiscale_v2.md).
 
 ## Repository layout
 
@@ -126,7 +128,7 @@ experiments must not modify `replication/MMUbiPred`.
 
 Training is designed for a Colab GPU runtime. The current workflow is:
 
-[05_CenterLoRA_ESM2_Full15_ThreeSeed_Colab.ipynb](experiment/notebooks/05_CenterLoRA_ESM2_Full15_ThreeSeed_Colab.ipynb)
+[06_MultiScale_CenterLoRA_ESM2_v2_Screen_Colab.ipynb](experiment/notebooks/06_MultiScale_CenterLoRA_ESM2_v2_Screen_Colab.ipynb)
 
 The notebook:
 

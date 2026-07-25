@@ -1,0 +1,103 @@
+{
+  "candidate": "center_lora_esm2_full15_v1",
+  "comparison_valid": true,
+  "independent_test_accessed": false,
+  "reference": "mmubipred_compatible",
+  "seeds": [
+    42,
+    123,
+    2026
+  ],
+  "aggregates": {
+    "center_lora_esm2_full15_v1": {
+      "auprc": {
+        "mean": 0.8970636474563549,
+        "standard_deviation": 0.0020407110847793764
+      },
+      "auroc": {
+        "mean": 0.879471100286052,
+        "standard_deviation": 0.001999266383396224
+      },
+      "fixed_accuracy": {
+        "mean": 0.7810579350563817,
+        "standard_deviation": 0.004214554815936786
+      },
+      "fixed_mcc": {
+        "mean": 0.5680022862234884,
+        "standard_deviation": 0.004436768767639906
+      },
+      "fixed_sensitivity": {
+        "mean": 0.7079241081109235,
+        "standard_deviation": 0.015718542357220564
+      },
+      "fixed_specificity": {
+        "mean": 0.8538027682287606,
+        "standard_deviation": 0.011896835715020712
+      },
+      "selected_mcc": {
+        "mean": 0.578811985388784,
+        "standard_deviation": 0.00528432646651939
+      }
+    },
+    "mmubipred_compatible": {
+      "auprc": {
+        "mean": 0.8772874304056053,
+        "standard_deviation": 0.017830893258157995
+      },
+      "auroc": {
+        "mean": 0.8627908286987541,
+        "standard_deviation": 0.006185903753084285
+      },
+      "fixed_accuracy": {
+        "mean": 0.760048670679197,
+        "standard_deviation": 0.007890910264271753
+      },
+      "fixed_mcc": {
+        "mean": 0.5638865117970172,
+        "standard_deviation": 0.011157950196180072
+      },
+      "fixed_sensitivity": {
+        "mean": 0.5698896572321251,
+        "standard_deviation": 0.08171755427215253
+      },
+      "fixed_specificity": {
+        "mean": 0.946388884448757,
+        "standard_deviation": 0.057119853478145445
+      },
+      "selected_mcc": {
+        "mean": 0.5723838591850594,
+        "standard_deviation": 0.00519731629340233
+      }
+    }
+  },
+  "candidate_minus_reference": {
+    "auprc": {
+      "mean": 0.019776217050749573,
+      "standard_deviation": 0.0159509906836901
+    },
+    "auroc": {
+      "mean": 0.0166802715872979,
+      "standard_deviation": 0.007341885010019981
+    },
+    "fixed_accuracy": {
+      "mean": 0.021009264377184644,
+      "standard_deviation": 0.012095196071384559
+    },
+    "fixed_mcc": {
+      "mean": 0.004115774426471153,
+      "standard_deviation": 0.007740821698845311
+    },
+    "fixed_sensitivity": {
+      "mean": 0.13803445087879831,
+      "standard_deviation": 0.0913408074243533
+    },
+    "fixed_specificity": {
+      "mean": -0.09258611621999635,
+      "standard_deviation": 0.06242421041255074
+    },
+    "selected_mcc": {
+      "mean": 0.0064281262037244975,
+      "standard_deviation": 0.0031937766657657973
+    }
+  }
+}

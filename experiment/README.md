@@ -51,7 +51,7 @@ continued to improve after validation MCC peaked, and the fusion gate was
 dominated by the frozen ESM branch. The independent test was not accessed. See
 [`results/2026-07-22-esm2-crossfusion-v1-screen`](results/2026-07-22-esm2-crossfusion-v1-screen/README.md).
 
-## Current candidate: CenterLoRA-ESM2 v1
+## Development champion: CenterLoRA-ESM2 v1
 
 This ablation tests a single, sharper hypothesis: task adaptation of an
 intermediate ESM-2 model. Rank-8 LoRA adapters modify the query and value
@@ -59,9 +59,14 @@ attention projections of `facebook/esm2_t12_35M_UR50D`, and a compact head
 classifies the representation at the central candidate lysine. It deliberately
 removes the CNN, AAindex, and learned branch gate.
 
-The early-stopped seed-42 screen passed its go criterion with fixed-threshold
-MCC 0.5689. The next stage reruns seed 42 and runs seeds 123 and 2026 for all
-15 epochs, while retaining the best development checkpoint:
+The full-15 paired development comparison completed for seeds 42, 123, and
+2026 without collapsed runs. Against the stabilized compatible baseline, v1
+improved mean fixed-threshold MCC from 0.5639 to 0.5680, AUROC from 0.8628 to
+0.8795, and AUPRC from 0.8773 to 0.8971. The test remained locked. The frozen
+compact record is in
+[`results/2026-07-25-center-lora-esm2-v1-development`](results/2026-07-25-center-lora-esm2-v1-development/README.md).
+
+The completed benchmark can be resumed without retraining:
 
 ```bash
 python experiment/scripts/run_validation_benchmark.py \
@@ -81,6 +86,23 @@ The Colab notebook then merges the three candidate runs with the already
 preserved stabilized baseline and verifies identical split hashes. Only a
 candidate selected without seeing the independent test may proceed to the
 single locked-test evaluation.
+
+## Current screen: MultiScale CenterLoRA-ESM2 v2
+
+V2 preserves the same ESM-2 backbone, LoRA adapters, optimizer, and full
+15-epoch schedule as v1. Its only controlled change is the classification
+head. It combines the contextual central lysine with masked mean pools over
+radius-2 and radius-5 neighbourhoods through a shared projection and learned
+softmax gate.
+
+The predeclared seed-42 screen compares v2 directly with the saved full-15 v1
+seed-42 result on the identical protein-grouped split. V2 must improve fixed
+MCC by at least 0.005 without reducing AUROC or AUPRC by more than 0.002.
+Details are frozen in
+[`methods/center_lora_esm2_multiscale_v2.md`](methods/center_lora_esm2_multiscale_v2.md).
+The independent test remains locked.
+
+[Open the MultiScale CenterLoRA-ESM2 v2 screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/06_MultiScale_CenterLoRA_ESM2_v2_Screen_Colab.ipynb)
 
 ## Layout
 

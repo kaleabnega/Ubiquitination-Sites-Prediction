@@ -819,6 +819,126 @@ class CenterLoRAESM2(nn.Module):
         return logits
 
 
+class MultiScaleCenterLoRAESM2(CenterLoRAESM2):
+    """Fuse candidate-centred ESM-2 context at multiple motif scales.
+
+    The LoRA-adapted backbone and input conversion are identical to
+    :class:`CenterLoRAESM2`. The only experimental change is the classification
+    head: it combines the central residue with masked mean pools over compact
+    residue windows around that site. A shared projection keeps the additional
+    task-specific parameter count small, while a learned softmax gate exposes
+    the relative contribution of each scale.
+    """
+
+    diagnostic_name = "component_weights"
+
+    def __init__(
+        self,
+        backbone: nn.Module,
+        backbone_hidden_size: int,
+        residue_token_lookup: Sequence[int],
+        cls_token_id: int,
+        eos_token_id: int,
+        pad_token_id: int,
+        window_size: int = 49,
+        classifier_hidden_dim: int = 256,
+        dropout: float = 0.3,
+        pooling_radii: Sequence[int] = (2, 5),
+    ) -> None:
+        radii = tuple(int(radius) for radius in pooling_radii)
+        if not radii or any(radius <= 0 for radius in radii):
+            raise ValueError("pooling_radii must contain positive integers")
+        if tuple(sorted(set(radii))) != radii:
+            raise ValueError("pooling_radii must be unique and increasing")
+        if any(radius > window_size // 2 for radius in radii):
+            raise ValueError("pooling radii cannot extend beyond the input window")
+
+        super().__init__(
+            backbone=backbone,
+            backbone_hidden_size=backbone_hidden_size,
+            residue_token_lookup=residue_token_lookup,
+            cls_token_id=cls_token_id,
+            eos_token_id=eos_token_id,
+            pad_token_id=pad_token_id,
+            window_size=window_size,
+            classifier_hidden_dim=classifier_hidden_dim,
+            dropout=dropout,
+        )
+        self.pooling_radii = radii
+        self.branch_names = ("esm2_center",) + tuple(
+            f"esm2_radius_{radius}" for radius in radii
+        )
+        self.component_projection = nn.Sequential(
+            nn.LayerNorm(backbone_hidden_size),
+            nn.Linear(backbone_hidden_size, classifier_hidden_dim),
+            nn.GELU(),
+        )
+        self.component_gate = nn.Linear(classifier_hidden_dim, 1)
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Linear(classifier_hidden_dim, 1),
+        )
+
+    @staticmethod
+    def _centered_mean_pool(
+        features: torch.Tensor,
+        center_positions: torch.Tensor,
+        residue_lengths: torch.Tensor,
+        radius: int,
+    ) -> torch.Tensor:
+        offsets = torch.arange(
+            -radius,
+            radius + 1,
+            dtype=center_positions.dtype,
+            device=center_positions.device,
+        )
+        positions = center_positions.unsqueeze(1) + offsets.unsqueeze(0)
+        valid = positions.ge(1) & positions.le(residue_lengths.unsqueeze(1))
+        safe_positions = positions.clamp(min=1, max=features.shape[1] - 2)
+        batch_indices = torch.arange(
+            features.shape[0], device=features.device
+        ).unsqueeze(1)
+        pooled_features = features[batch_indices, safe_positions]
+        valid_weights = valid.unsqueeze(-1).to(features.dtype)
+        return (pooled_features * valid_weights).sum(dim=1) / valid_weights.sum(
+            dim=1
+        ).clamp_min(1)
+
+    def forward(
+        self, tokens: torch.Tensor, return_gates: bool = False
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        if tokens.ndim != 2 or tokens.shape[1] != self.window_size:
+            raise ValueError(
+                f"Expected token shape (batch, {self.window_size}), got {tokens.shape}"
+            )
+        esm_ids, attention_mask, center_positions = self._esm_inputs(tokens)
+        features = self.esm_backbone(
+            input_ids=esm_ids,
+            attention_mask=attention_mask,
+        ).last_hidden_state
+        batch_indices = torch.arange(tokens.shape[0], device=tokens.device)
+        residue_lengths = attention_mask.sum(dim=1) - 2
+        components = [features[batch_indices, center_positions]]
+        components.extend(
+            self._centered_mean_pool(
+                features=features,
+                center_positions=center_positions,
+                residue_lengths=residue_lengths,
+                radius=radius,
+            )
+            for radius in self.pooling_radii
+        )
+        projected = self.component_projection(torch.stack(components, dim=1))
+        component_weights = torch.softmax(
+            self.component_gate(projected).squeeze(-1), dim=1
+        )
+        fused = (projected * component_weights.unsqueeze(-1)).sum(dim=1)
+        logits = self.classifier(fused).squeeze(-1)
+        if return_gates:
+            return logits, component_weights
+        return logits
+
+
 class MMUbiPredCompatible(nn.Module):
     """PyTorch reimplementation of the released three-branch topology.
 
@@ -996,6 +1116,22 @@ def build_model(
             window_size=window_size,
             classifier_hidden_dim=int(model_config["classifier_hidden_dim"]),
             dropout=float(model_config["dropout"]),
+            lora_rank=int(model_config["lora_rank"]),
+            lora_alpha=int(model_config["lora_alpha"]),
+            lora_dropout=float(model_config["lora_dropout"]),
+            lora_target_modules=tuple(
+                str(value) for value in model_config["lora_target_modules"]
+            ),
+        )
+    if architecture == "center_lora_esm2_multiscale_v2":
+        return MultiScaleCenterLoRAESM2.from_pretrained(
+            pretrained_model_name=str(model_config["pretrained_model_name"]),
+            window_size=window_size,
+            classifier_hidden_dim=int(model_config["classifier_hidden_dim"]),
+            dropout=float(model_config["dropout"]),
+            pooling_radii=tuple(
+                int(value) for value in model_config["pooling_radii"]
+            ),
             lora_rank=int(model_config["lora_rank"]),
             lora_alpha=int(model_config["lora_alpha"]),
             lora_dropout=float(model_config["lora_dropout"]),
