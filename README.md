@@ -29,7 +29,8 @@ MMUbiPred result on the locked independent test set.
 | Candidate 2 | ESM2-CrossFusion v1 | MCC `0.49815`, seed 42 | Rejected on development data |
 | Development champion | CenterLoRA-ESM2 v1 | MCC `0.56800 ± 0.00444` | Valid three-seed comparison |
 | Candidate 4 | MultiScale CenterLoRA-ESM2 v2 | MCC `0.57238`, seed 42 | Stopped by predeclared screen |
-| Final backbone screen | CenterLoRA-ProtBERT v1 | Seed 42 predeclared | Independent test locked |
+| Final backbone screen | CenterLoRA-ProtBERT v1 | MCC `0.58275`, seed 42 | Passed; architecture frozen |
+| Final evaluation | CenterLoRA-ProtBERT v1 | Four-epoch complete-training refit | Independent test authorized, result pending |
 
 Candidate results above use protein-grouped development splits drawn only from
 the released training set. They are not independent-test results.
@@ -100,11 +101,17 @@ target, while AUROC, AUPRC, and selected-threshold MCC decreased. It was
 therefore stopped without additional seeds. The independent test remains
 locked.
 
-The final architecture-exploration experiment changes only the pretrained
+The final architecture-exploration experiment changed only the pretrained
 backbone from ESM-2 35M to ProtBERT-BFD while retaining the central-residue
-head and LoRA protocol. After its predeclared decision and any authorized
-paired confirmation, architecture selection closes before the independent
-test is accessed.
+head and LoRA protocol. It passed every predeclared seed-42 screen condition:
+fixed MCC `0.58275`, selected MCC `0.58909`, AUROC `0.88719`, and AUPRC
+`0.90241`, without prediction collapse. Architecture selection is now closed.
+
+Because one ProtBERT development run required approximately six Colab GPU
+hours, immediate three-seed confirmation was deferred. The frozen final
+protocol refits seed 42 for the development-selected four epochs on all 91,723
+released training records and evaluates once on the independent test. This
+single-seed limitation is recorded prospectively and must be disclosed.
 
 Read the complete
 [CenterLoRA-ESM2 v1 method specification](experiment/methods/center_lora_esm2_v1.md)
@@ -136,9 +143,9 @@ experiments must not modify `replication/MMUbiPred`.
 
 ## Running the current experiment in Google Colab
 
-Training is designed for a Colab GPU runtime. The current workflow is:
+Training is designed for a Colab GPU runtime. The final workflow is:
 
-[07_CenterLoRA_ProtBERT_v1_Screen_Colab.ipynb](experiment/notebooks/07_CenterLoRA_ProtBERT_v1_Screen_Colab.ipynb)
+[08_CenterLoRA_ProtBERT_Final_Test_Colab.ipynb](experiment/notebooks/08_CenterLoRA_ProtBERT_Final_Test_Colab.ipynb)
 
 The notebook:
 
@@ -148,8 +155,11 @@ The notebook:
 4. removes Colab’s incompatible optional `torchao` package, which the model
    does not use;
 5. runs the test suite; and
-6. writes training history, metrics, provenance, predictions, and the best
-   development checkpoint directly to Google Drive.
+6. verifies the frozen seed-42 development selection;
+7. refits for four epochs on the complete released training set with
+   epoch-boundary resume; and
+8. requires explicit acknowledgement before a non-overwriting one-time
+   independent-test evaluation.
 
 For this private repository, create a fine-grained GitHub token with read-only
 access, save it in Colab Secrets as `GITHUB_TOKEN`, and enable notebook access

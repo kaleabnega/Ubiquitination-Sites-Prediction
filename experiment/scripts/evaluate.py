@@ -9,6 +9,7 @@ import hashlib
 import json
 import sys
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -20,7 +21,7 @@ SRC_ROOT = PROJECT_ROOT / "experiment" / "src"
 sys.path.insert(0, str(SRC_ROOT))
 
 from ubipred.data import SiteDataset, load_normalized_aaindex, make_loader  # noqa: E402
-from ubipred.engine import predict  # noqa: E402
+from ubipred.engine import load_checkpoint_model_state, predict  # noqa: E402
 from ubipred.fasta import load_released_split  # noqa: E402
 from ubipred.metrics import compute_metrics, write_json  # noqa: E402
 from ubipred.model import build_model  # noqa: E402
@@ -43,6 +44,20 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def ensure_locked_outputs_absent(run_dir: Path) -> None:
+    locked_outputs = [
+        run_dir / "locked_test_metrics.json",
+        run_dir / "locked_test_predictions.npz",
+        run_dir / "locked_test_predictions.tsv",
+    ]
+    existing_outputs = [path for path in locked_outputs if path.exists()]
+    if existing_outputs:
+        raise FileExistsError(
+            "Refusing to repeat the locked-test evaluation because output "
+            f"already exists: {existing_outputs[0]}"
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", type=Path, required=True)
@@ -58,6 +73,11 @@ def main() -> None:
     )
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--num-workers", type=int, default=2)
+    parser.add_argument(
+        "--require-full-refit",
+        action="store_true",
+        help="Reject checkpoints not explicitly marked as complete-training refits.",
+    )
     args = parser.parse_args()
 
     if not args.allow_locked_test:
@@ -68,12 +88,28 @@ def main() -> None:
 
     run_dir = args.run_dir.resolve()
     data_dir = args.data_dir.resolve()
+    ensure_locked_outputs_absent(run_dir)
+
     checkpoint_path = run_dir / "best.pt"
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     metadata = checkpoint["metadata"]
+    if args.require_full_refit and metadata.get("training_scope") != (
+        "complete_released_training_set"
+    ):
+        raise ValueError(
+            "Checkpoint is not marked as a complete released-training-set refit"
+        )
+    manifest_path = run_dir / "run_manifest.json"
+    manifest = None
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if bool(manifest.get("locked_test_accessed", False)):
+            raise RuntimeError(
+                "Run manifest already records independent-test access"
+            )
     window_size = int(metadata["window_size"])
     aaindex_path = data_dir / "aaindex31.txt"
     actual_aaindex_sha = sha256(aaindex_path)
@@ -98,7 +134,7 @@ def main() -> None:
         window_size=window_size,
         model_config=metadata["model_config"],
     )
-    model.load_state_dict(checkpoint["model_state_dict"])
+    load_checkpoint_model_state(model, checkpoint)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
@@ -171,6 +207,19 @@ def main() -> None:
                     *[float(value) for value in diagnostic_values],
                 ]
             )
+
+    if manifest is not None:
+        manifest["locked_test_accessed"] = True
+        manifest["locked_test_evaluation"] = {
+            "evaluated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "checkpoint_sha256": results["checkpoint_sha256"],
+            "primary_threshold": 0.5,
+            "secondary_threshold_selected_on_development": selected_threshold,
+            "metrics_file": "locked_test_metrics.json",
+            "predictions_file": "locked_test_predictions.npz",
+            "predictions_table": "locked_test_predictions.tsv",
+        }
+        write_json(manifest_path, manifest)
 
     print(json.dumps(results, indent=2, sort_keys=True))
 

@@ -80,6 +80,37 @@ A pass authorizes a paired three-seed development confirmation. Any other
 outcome retains ESM-2 v1 and closes architecture exploration without further
 ProtBERT runs.
 
+## Frozen seed-42 final-evaluation protocol
+
+The seed-42 screen passed every predeclared condition on the identical
+development split:
+
+- fixed-threshold MCC: 0.5827515028;
+- selected-threshold MCC: 0.5890905043;
+- AUROC: 0.8871901712;
+- AUPRC: 0.9024115065; and
+- no single-class prediction collapse.
+
+The fixed MCC gain over CenterLoRA-ESM2 v1 was 0.0138144930. Because the
+approximately six-hour ProtBERT run made immediate three-seed confirmation
+impractical, the architecture was frozen after this passing screen. This is a
+resource-driven deviation from the preferred three-seed confirmation and must
+be disclosed as a limitation.
+
+The one-time independent-test protocol is fixed before test access:
+
+1. initialize a fresh seed-42 CenterLoRA-ProtBERT v1 model;
+2. refit for exactly four epochs, the epoch count selected on development;
+3. use every one of the 91,723 released training records;
+4. report threshold 0.5 as the primary result;
+5. report the development-selected threshold 0.555 only as secondary; and
+6. evaluate once on the released 12,598-record independent test.
+
+No architecture, optimization setting, epoch count, or reporting threshold may
+change after this evaluation. Later seeds may repeat the identical frozen
+protocol, but all such results must be reported rather than selecting the best
+seed.
+
 ## External-pretraining disclosure
 
 Both candidates use external unsupervised protein pretraining, but their

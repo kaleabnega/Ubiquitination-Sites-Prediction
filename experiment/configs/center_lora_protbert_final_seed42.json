@@ -1,0 +1,42 @@
+{
+  "experiment_name": "center_lora_protbert_v1_final_seed42",
+  "data_dir": "replication/MMUbiPred",
+  "output_dir": "experiment/outputs/center_lora_protbert_v1_final_seed42",
+  "seed": 42,
+  "window_size": 49,
+  "batch_size": 16,
+  "gradient_accumulation_steps": 8,
+  "num_workers": 0,
+  "refit_epochs": 4,
+  "validation_selected_threshold": 0.5549999999999999,
+  "expected_full_training_samples": 91723,
+  "learning_rate": 0.0002,
+  "weight_decay": 0.0001,
+  "optimizer": "adamw",
+  "optimizer_epsilon": 1e-8,
+  "gradient_clip_norm": 1.0,
+  "use_amp": true,
+  "selection_contract": {
+    "experiment_name": "center_lora_protbert_v1",
+    "seed": 42,
+    "epochs_completed": 15,
+    "best_epoch": 4,
+    "validation_mcc_at_0_5": 0.5827515027503104,
+    "validation_selected_threshold": 0.5549999999999999,
+    "validation_indices_sha256": "5443ae3632aacad7270ad03439c45461bd21dfd5e82229f258ddff7230de8e5c",
+    "single_class_predictions_at_0_5": false
+  },
+  "model": {
+    "architecture": "center_lora_protbert_v1",
+    "pretrained_model_name": "Rostlab/prot_bert_bfd",
+    "classifier_hidden_dim": 256,
+    "dropout": 0.3,
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.1,
+    "lora_target_modules": ["query", "value"],
+    "gradient_checkpointing": true,
+    "tokenizer_vocab_filename": "vocab.txt",
+    "backbone_model_type": "bert"
+  }
+}
