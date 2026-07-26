@@ -15,9 +15,10 @@ The project has two goals:
 2. develop and rigorously evaluate a new architecture that improves predictive
    performance under a fair comparison protocol.
 
-The replication is complete. Architecture development is ongoing, and this
-repository does **not** yet claim a new model that outperforms the published
-MMUbiPred result on the locked independent test set.
+The replication is complete. Architecture development is ongoing. One frozen
+single-seed candidate produced a small numerical MCC gain on the released test,
+but the evidence is not yet strong enough to claim robust superiority over
+MMUbiPred.
 
 ## Current status
 
@@ -27,13 +28,15 @@ MMUbiPred result on the locked independent test set.
 | Development baseline | Stabilized MMUbiPred-compatible implementation | MCC `0.56389 ± 0.01116` | Reference across three development seeds |
 | Candidate 1 | UbiFusionNet v1 | MCC `0.51671 ± 0.00538` | Rejected on development data |
 | Candidate 2 | ESM2-CrossFusion v1 | MCC `0.49815`, seed 42 | Rejected on development data |
-| Development champion | CenterLoRA-ESM2 v1 | MCC `0.56800 ± 0.00444` | Valid three-seed comparison |
+| Three-seed ESM-2 reference | CenterLoRA-ESM2 v1 | MCC `0.56800 ± 0.00444` | Valid three-seed comparison |
 | Candidate 4 | MultiScale CenterLoRA-ESM2 v2 | MCC `0.57238`, seed 42 | Stopped by predeclared screen |
-| Final backbone screen | CenterLoRA-ProtBERT v1 | MCC `0.58275`, seed 42 | Passed; architecture frozen |
-| Final evaluation | CenterLoRA-ProtBERT v1 | Existing seed-42 epoch-4 checkpoint | Independent test authorized, result pending |
+| Backbone screen | CenterLoRA-ProtBERT v1 | MCC `0.58275`, seed 42 | Passed development screen |
+| Historical-test evaluation | CenterLoRA-ProtBERT v1 | MCC `0.54997`, seed 42 | Numerical gain of `0.00413`; inconclusive |
+| Current screen | LoRA-ESM2 Hybrid v1 | Seed-42 development protocol | Ready to run |
 
-Candidate results above use protein-grouped development splits drawn only from
-the released training set. They are not independent-test results.
+Architecture-screen results above use protein-grouped development splits drawn
+only from the released training set. The separately labelled historical-test
+row is the only new-model result from the released test.
 
 ## Exact replication result
 
@@ -72,19 +75,22 @@ Architecture selection, early stopping, threshold selection, and ablations use
 only the released training set. Models are compared on identical
 protein-grouped development splits using fixed seeds and split hashes.
 
-The independent test remains locked until one architecture and its
-hyperparameters have been selected. The fixed threshold of `0.5` is always
-reported for direct comparison with MMUbiPred. A validation-selected threshold
-may be reported separately but cannot replace the fixed-threshold comparison.
+The released test was held out during the original architecture-selection
+sequence and then evaluated once for the frozen ProtBERT candidate. It is now a
+historical benchmark and must not guide later architecture changes. The fixed
+threshold of `0.5` is always reported for direct comparison with MMUbiPred. A
+validation-selected threshold may be reported separately but cannot replace
+the fixed-threshold comparison. A later publication-grade final claim requires
+a newly curated, homology-aware blind external test set.
 
 Protein-language models introduce external unsupervised pretraining even when
 the labelled train/test split is unchanged. Experiments using such models
 record this explicitly and will require a homology-aware robustness analysis
 before publication.
 
-## Current development champion
+## Current evidence and next architecture
 
-**CenterLoRA-ESM2 v1** remains the development champion. It uses:
+**CenterLoRA-ESM2 v1** is the stable three-seed ESM-2 reference. It uses:
 
 - the `facebook/esm2_t12_35M_UR50D` protein language model;
 - rank-8 LoRA adapters on attention query and value projections;
@@ -98,27 +104,39 @@ baseline.
 MultiScale v2 added radius-2 and radius-5 contextual mean pools. On seed 42,
 it improved fixed MCC over v1 by only `0.00345`, below the predeclared `0.005`
 target, while AUROC, AUPRC, and selected-threshold MCC decreased. It was
-therefore stopped without additional seeds. The independent test remains
-locked.
+therefore stopped without additional seeds. The released test remained locked
+at that stage.
 
-The final architecture-exploration experiment changed only the pretrained
+The subsequent backbone experiment changed only the pretrained
 backbone from ESM-2 35M to ProtBERT-BFD while retaining the central-residue
 head and LoRA protocol. It passed every predeclared seed-42 screen condition:
 fixed MCC `0.58275`, selected MCC `0.58909`, AUROC `0.88719`, and AUPRC
-`0.90241`, without prediction collapse. Architecture selection is now closed.
+`0.90241`, without prediction collapse.
 
 Because one ProtBERT development run required approximately six Colab GPU
 hours, immediate three-seed confirmation and a new full-data refit were
-deferred. The frozen final protocol evaluates the existing development-best
-seed-42 checkpoint once on the independent test. It was fitted on 82,535
-records while 9,188 records were retained for development validation. These
-single-seed and reduced-fitting-set limitations are recorded prospectively and
-must be disclosed.
+deferred. Its frozen epoch-4 seed-42 checkpoint was evaluated on the released
+test at threshold 0.5. It obtained MCC `0.54997`, accuracy `0.76266`,
+sensitivity `0.69332`, and specificity `0.86733`. Relative to the reproduced
+paper model, MCC increased by only `0.00413` while accuracy and sensitivity
+decreased. This is a numerical MCC win, not compelling evidence of a generally
+better model, especially because it is one seed fitted on only 82,535 of the
+91,723 released training records.
+
+The current development-only experiment returns to the faster ESM-2 35M
+backbone and adds two explicitly complementary experts: a dilated local-motif
+CNN and a bidirectional-AAindex encoder. Learned feature-level gating, residual
+fusion, and auxiliary branch supervision combine them. The seed-42 screen uses
+only the established protein-grouped development split and does not read the
+released test. It must materially beat CenterLoRA-ESM2 v1 and match the
+ProtBERT development MCC before it can become the new performance candidate.
 
 Read the complete
 [CenterLoRA-ESM2 v1 method specification](experiment/methods/center_lora_esm2_v1.md)
 and the
 [MultiScale v2 screen result](experiment/results/2026-07-26-center-lora-esm2-multiscale-v2-screen/README.md).
+The hybrid protocol is specified in
+[LoRA-ESM2 Hybrid v1](experiment/methods/lora_esm2_hybrid_v1.md).
 
 ## Repository layout
 
@@ -145,10 +163,10 @@ experiments must not modify `replication/MMUbiPred`.
 
 ## Running the current experiment in Google Colab
 
-Training and evaluation are designed for a Colab GPU runtime. The final
-workflow is:
+Training and evaluation are designed for a Colab GPU runtime. The current
+development workflow is:
 
-[07_CenterLoRA_ProtBERT_v1_Screen_Colab.ipynb](experiment/notebooks/07_CenterLoRA_ProtBERT_v1_Screen_Colab.ipynb)
+[08_LoRA_ESM2_Hybrid_v1_Screen_Colab.ipynb](experiment/notebooks/08_LoRA_ESM2_Hybrid_v1_Screen_Colab.ipynb)
 
 The notebook:
 
@@ -157,10 +175,10 @@ The notebook:
 3. installs the pinned experiment dependencies;
 4. removes Colab’s incompatible optional `torchao` package, which the model
    does not use;
-5. runs the test suite; and
-6. verifies the frozen seed-42 development selection; and
-7. requires explicit acknowledgement before evaluating the existing
-   development-best checkpoint once on the independent test.
+5. runs the test suite;
+6. resumes or runs the 15-epoch seed-42 development screen;
+7. verifies that the comparison uses the identical validation split; and
+8. applies the predeclared decision rule without loading the released test.
 
 For this private repository, create a fine-grained GitHub token with read-only
 access, save it in Colab Secrets as `GITHUB_TOKEN`, and enable notebook access

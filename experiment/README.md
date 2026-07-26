@@ -16,9 +16,12 @@ The headline comparison uses only these released labelled samples:
 - Test positives: `Positive_10_percent_independent_test_set_DeepUBI.fasta`
 - Test negatives: `Negative_10_percent_independent_test_set_DeepUBI.fasta`
 
-The independent test set is locked. Architecture selection, early stopping,
-and threshold selection use only the released training data. The fixed 0.5
-threshold is always reported for direct comparison with MMUbiPred.
+The released test was locked during the original architecture-selection
+sequence and then evaluated once for the frozen ProtBERT candidate. It is now a
+historical benchmark. Later architecture selection uses only released training
+data, and a new blind external set is required for a genuinely untouched final
+evaluation. The fixed 0.5 threshold remains the primary direct-comparison
+threshold.
 
 ## Pilot model: UbiFusionNet v1
 
@@ -51,7 +54,7 @@ continued to improve after validation MCC peaked, and the fusion gate was
 dominated by the frozen ESM branch. The independent test was not accessed. See
 [`results/2026-07-22-esm2-crossfusion-v1-screen`](results/2026-07-22-esm2-crossfusion-v1-screen/README.md).
 
-## Development champion: CenterLoRA-ESM2 v1
+## Three-seed ESM-2 reference: CenterLoRA-ESM2 v1
 
 This ablation tests a single, sharper hypothesis: task adaptation of an
 intermediate ESM-2 model. Rank-8 LoRA adapters modify the query and value
@@ -62,8 +65,8 @@ removes the CNN, AAindex, and learned branch gate.
 The full-15 paired development comparison completed for seeds 42, 123, and
 2026 without collapsed runs. Against the stabilized compatible baseline, v1
 improved mean fixed-threshold MCC from 0.5639 to 0.5680, AUROC from 0.8628 to
-0.8795, and AUPRC from 0.8773 to 0.8971. The test remained locked. The frozen
-compact record is in
+0.8795, and AUPRC from 0.8773 to 0.8971. The test remained locked during this
+comparison. The frozen compact record is in
 [`results/2026-07-25-center-lora-esm2-v1-development`](results/2026-07-25-center-lora-esm2-v1-development/README.md).
 
 The completed benchmark can be resumed without retraining:
@@ -83,9 +86,9 @@ TorchAO or quantized weights.
 The benchmark runner accepts `--output-root` for persistent Google Drive
 storage and `--resume` to reuse completed seeds after a runtime disconnection.
 The Colab notebook then merges the three candidate runs with the already
-preserved stabilized baseline and verifies identical split hashes. Only a
-candidate selected without seeing the independent test may proceed to the
-single locked-test evaluation.
+preserved stabilized baseline and verifies identical split hashes. At that
+stage, only a candidate selected without seeing the released test was eligible
+for its one-time evaluation.
 
 ## Stopped screen: MultiScale CenterLoRA-ESM2 v2
 
@@ -100,7 +103,7 @@ seed-42 result on the identical protein-grouped split. V2 must improve fixed
 MCC by at least 0.005 without reducing AUROC or AUPRC by more than 0.002.
 Details are frozen in
 [`methods/center_lora_esm2_multiscale_v2.md`](methods/center_lora_esm2_multiscale_v2.md).
-The independent test remains locked.
+The released test remained locked at that stage.
 
 [Open the MultiScale CenterLoRA-ESM2 v2 screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/06_MultiScale_CenterLoRA_ESM2_v2_Screen_Colab.ipynb)
 
@@ -111,7 +114,7 @@ of mean fusion weight but did not improve discrimination. V2 was therefore
 stopped without additional seeds or test access. See the
 [`frozen screen result`](results/2026-07-26-center-lora-esm2-multiscale-v2-screen/README.md).
 
-## Final backbone screen: CenterLoRA-ProtBERT v1
+## Backbone screen and historical-test result: CenterLoRA-ProtBERT v1
 
 This experiment changes only the pretrained backbone of CenterLoRA v1 from
 ESM-2 35M to `Rostlab/prot_bert_bfd`. The central-residue head, rank-8 LoRA
@@ -124,14 +127,44 @@ checkpointing controls activation memory. Lightweight trainable-state and RNG
 checkpoints are written after each epoch so a Drive-backed Colab run can resume
 without repeating completed epochs.
 
-The fixed screen contract is documented in
+The fixed development-screen contract is documented in
 [`methods/center_lora_protbert_v1.md`](methods/center_lora_protbert_v1.md).
 ProtBERT must improve fixed MCC over ESM-2 v1 by at least 0.005, preserve
 selected-threshold MCC, and satisfy the AUROC/AUPRC safeguards. Any failure
-retains ESM-2 v1 and closes architecture exploration. The independent test
-remains locked.
+would have retained ESM-2 v1.
 
 [Open the CenterLoRA-ProtBERT v1 screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/07_CenterLoRA_ProtBERT_v1_Screen_Colab.ipynb)
+
+The seed-42 screen passed at fixed development MCC `0.58275`. Its frozen
+epoch-4 checkpoint subsequently obtained MCC `0.54997` on the released test at
+threshold 0.5, compared with `0.54584` for the reproduced paper model. The
+small `0.00413` numerical gain is accompanied by lower accuracy and
+sensitivity, is based on one seed, and does not establish robust superiority.
+The released test is no longer untouched for future architecture work.
+
+## Current screen: LoRA-ESM2 Hybrid v1
+
+This candidate uses the faster `facebook/esm2_t12_35M_UR50D` backbone with the
+same rank-8 attention LoRA protocol. It combines three feature-level experts:
+
+1. contextual central and mean-pooled ESM-2 representations;
+2. multi-receptive-field one-hot motif convolutions; and
+3. a bidirectional GRU over the paper's normalized AAindex features.
+
+Sample-dependent gates and a residual projection fuse the experts. Auxiliary
+branch losses provide deep supervision during training so that an initially
+weak expert is not immediately suppressed by the gate.
+
+The predeclared seed-42 screen uses the identical protein-grouped development
+split as ESM-2 v1 and runs all 15 epochs. A performance GO requires matching or
+exceeding ProtBERT's fixed development MCC `0.58275`, while preserving the
+ESM-2 reference's selected MCC and ranking metrics. It does not load the
+released test.
+
+[Open the LoRA-ESM2 Hybrid v1 screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/08_LoRA_ESM2_Hybrid_v1_Screen_Colab.ipynb)
+
+The complete contract is in
+[`methods/lora_esm2_hybrid_v1.md`](methods/lora_esm2_hybrid_v1.md).
 
 ## Layout
 
@@ -224,10 +257,10 @@ python experiment/scripts/merge_validation_benchmarks.py \
   --output-dir experiment/outputs/benchmarks/paired_baseline_stabilized_v2
 ```
 
-## Locked evaluation
+## Historical released-test evaluation
 
-Run this only after the architecture and hyperparameters have been selected
-using training/validation data:
+The evaluator below was used only after the original ProtBERT architecture and
+hyperparameters were selected using training/validation data:
 
 ```bash
 python experiment/scripts/evaluate.py \
@@ -237,7 +270,10 @@ python experiment/scripts/evaluate.py \
 ```
 
 Both fixed-threshold and validation-selected-threshold results are saved. The
-fixed-threshold MCC target to beat is `0.5458386140298045`.
+fixed-threshold MMUbiPred reference is `0.5458386140298045`. Because this
+released test has now been accessed, do not use it to choose or revise the
+hybrid architecture. A new blind external test is required for the eventual
+confirmatory claim.
 
 ## Released-data audit findings
 

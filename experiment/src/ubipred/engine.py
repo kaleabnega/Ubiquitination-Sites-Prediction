@@ -55,6 +55,9 @@ def _loss_with_regularization(
     regularization_loss = getattr(model, "regularization_loss", None)
     if callable(regularization_loss):
         loss = loss + regularization_loss()
+    auxiliary_loss = getattr(model, "auxiliary_loss", None)
+    if callable(auxiliary_loss):
+        loss = loss + auxiliary_loss(labels)
     return loss
 
 

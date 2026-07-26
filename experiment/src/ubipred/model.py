@@ -351,6 +351,9 @@ class ESM2CrossFusion(nn.Module):
         dropout: float = 0.25,
         freeze_backbone: bool = True,
         unfreeze_last_n_layers: int = 0,
+        preserve_backbone_trainability: bool = False,
+        aaindex_gru_hidden_dim: int = 0,
+        auxiliary_loss_weight: float = 0.0,
     ) -> None:
         super().__init__()
         if window_size % 2 == 0:
@@ -365,6 +368,15 @@ class ESM2CrossFusion(nn.Module):
             raise ValueError("branch_dim and conv_channels must be positive")
         if unfreeze_last_n_layers < 0:
             raise ValueError("unfreeze_last_n_layers cannot be negative")
+        if preserve_backbone_trainability and unfreeze_last_n_layers:
+            raise ValueError(
+                "Cannot request explicit layer unfreezing while preserving "
+                "backbone trainability"
+            )
+        if aaindex_gru_hidden_dim < 0:
+            raise ValueError("aaindex_gru_hidden_dim cannot be negative")
+        if auxiliary_loss_weight < 0:
+            raise ValueError("auxiliary_loss_weight cannot be negative")
 
         aaindex_tensor = torch.as_tensor(aaindex_lookup, dtype=torch.float32)
         if tuple(aaindex_tensor.shape) != (21, 31):
@@ -388,11 +400,18 @@ class ESM2CrossFusion(nn.Module):
         self.eos_token_id = int(eos_token_id)
         self.pad_token_id = int(pad_token_id)
         self.esm_backbone = backbone
+        self.auxiliary_loss_weight = float(auxiliary_loss_weight)
+        self._last_auxiliary_logits: torch.Tensor | None = None
         self.register_buffer("residue_token_lookup", residue_ids, persistent=True)
 
-        for parameter in self.esm_backbone.parameters():
-            parameter.requires_grad = not freeze_backbone
-        if freeze_backbone and unfreeze_last_n_layers:
+        if not preserve_backbone_trainability:
+            for parameter in self.esm_backbone.parameters():
+                parameter.requires_grad = not freeze_backbone
+        if (
+            not preserve_backbone_trainability
+            and freeze_backbone
+            and unfreeze_last_n_layers
+        ):
             encoder = getattr(self.esm_backbone, "encoder", None)
             layers = getattr(encoder, "layer", None)
             if layers is None:
@@ -445,8 +464,21 @@ class ESM2CrossFusion(nn.Module):
             freeze=True,
             padding_idx=self.padding_index,
         )
+        self.aaindex_gru: nn.GRU | None
+        if aaindex_gru_hidden_dim:
+            self.aaindex_gru = nn.GRU(
+                input_size=31,
+                hidden_size=aaindex_gru_hidden_dim,
+                num_layers=1,
+                batch_first=True,
+                bidirectional=True,
+            )
+            aaindex_projection_input = aaindex_gru_hidden_dim * 4
+        else:
+            self.aaindex_gru = None
+            aaindex_projection_input = 31 * 2
         self.aaindex_projection = nn.Sequential(
-            nn.Linear(31 * 2, branch_dim),
+            nn.Linear(aaindex_projection_input, branch_dim),
             nn.LayerNorm(branch_dim),
             nn.GELU(),
             nn.Dropout(dropout),
@@ -470,6 +502,16 @@ class ESM2CrossFusion(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(branch_dim // 2, 1),
         )
+        self.auxiliary_heads = nn.ModuleList()
+        if self.auxiliary_loss_weight > 0:
+            self.auxiliary_heads.extend(
+                nn.Sequential(
+                    nn.LayerNorm(branch_dim),
+                    nn.Dropout(dropout),
+                    nn.Linear(branch_dim, 1),
+                )
+                for _ in self.branch_names
+            )
 
     @classmethod
     def from_pretrained(
@@ -615,6 +657,8 @@ class ESM2CrossFusion(nn.Module):
         local_vector = self.local_projection(torch.cat([local_max, local_mean], dim=-1))
 
         aaindex = self.aaindex_embedding(tokens)
+        if self.aaindex_gru is not None:
+            aaindex, _ = self.aaindex_gru(aaindex)
         aaindex_vector = self.aaindex_projection(
             torch.cat(
                 [
@@ -626,6 +670,14 @@ class ESM2CrossFusion(nn.Module):
         )
 
         vectors = [esm_vector, local_vector, aaindex_vector]
+        if self.training and self.auxiliary_loss_weight > 0:
+            self._last_auxiliary_logits = torch.stack(
+                [
+                    head(vector).squeeze(-1)
+                    for head, vector in zip(self.auxiliary_heads, vectors)
+                ],
+                dim=1,
+            )
         concatenated = torch.cat(vectors, dim=-1)
         gates = torch.softmax(self.gate(concatenated), dim=-1)
         stacked = torch.stack(vectors, dim=1)
@@ -635,6 +687,102 @@ class ESM2CrossFusion(nn.Module):
         if return_gates:
             return logits, gates
         return logits
+
+    def auxiliary_loss(self, labels: torch.Tensor) -> torch.Tensor:
+        """Return equally weighted branch supervision after a training forward."""
+
+        if self.auxiliary_loss_weight == 0:
+            return labels.new_zeros(())
+        if self._last_auxiliary_logits is None:
+            raise RuntimeError(
+                "auxiliary_loss requires a preceding training forward pass"
+            )
+        auxiliary_logits = self._last_auxiliary_logits
+        self._last_auxiliary_logits = None
+        targets = labels.unsqueeze(1).expand_as(auxiliary_logits)
+        return self.auxiliary_loss_weight * F.binary_cross_entropy_with_logits(
+            auxiliary_logits, targets
+        )
+
+
+class LoRAESM2Hybrid(ESM2CrossFusion):
+    """LoRA-adapted ESM-2 fused with explicit motif and AAindex experts."""
+
+    branch_names = ("esm2_context", "local_motif", "aaindex")
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        aaindex_lookup: np.ndarray | torch.Tensor,
+        pretrained_model_name: str,
+        lora_rank: int,
+        lora_alpha: int,
+        lora_dropout: float,
+        lora_target_modules: Sequence[str],
+        **kwargs: object,
+    ) -> "LoRAESM2Hybrid":
+        if lora_rank <= 0 or lora_alpha <= 0:
+            raise ValueError("LoRA rank and alpha must be positive")
+        if not lora_target_modules:
+            raise ValueError("At least one LoRA target module is required")
+        try:
+            from peft import LoraConfig, get_peft_model
+            from transformers import AutoModel, AutoTokenizer
+        except ImportError as error:
+            raise ImportError(
+                "LoRAESM2Hybrid requires transformers and peft; install "
+                "experiment/requirements-colab.txt"
+            ) from error
+
+        tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name)
+        base_backbone = AutoModel.from_pretrained(
+            pretrained_model_name, add_pooling_layer=False
+        )
+        special_ids = {
+            "cls_token_id": tokenizer.cls_token_id,
+            "eos_token_id": tokenizer.eos_token_id,
+            "pad_token_id": tokenizer.pad_token_id,
+        }
+        if any(value is None for value in special_ids.values()):
+            raise ValueError("The selected tokenizer is missing CLS, EOS, or PAD IDs")
+        residue_ids = [
+            int(tokenizer.convert_tokens_to_ids(residue))
+            for residue in cls.alphabet[:-1]
+        ]
+        if tokenizer.unk_token_id is not None and any(
+            token_id == tokenizer.unk_token_id for token_id in residue_ids
+        ):
+            raise ValueError("The selected tokenizer does not support the canonical alphabet")
+        residue_ids.append(int(tokenizer.pad_token_id))
+
+        lora_config = LoraConfig(
+            task_type="FEATURE_EXTRACTION",
+            r=int(lora_rank),
+            lora_alpha=int(lora_alpha),
+            lora_dropout=float(lora_dropout),
+            target_modules=[str(value) for value in lora_target_modules],
+            bias="none",
+        )
+        try:
+            backbone = get_peft_model(base_backbone, lora_config)
+        except ImportError as error:
+            if "incompatible version of torchao" in str(error).lower():
+                raise ImportError(
+                    "Colab's optional torchao package is incompatible with PEFT. "
+                    "Run `%pip uninstall -y torchao` before training; this "
+                    "experiment does not use TorchAO."
+                ) from error
+            raise
+
+        return cls(
+            aaindex_lookup=aaindex_lookup,
+            backbone=backbone,
+            residue_token_lookup=residue_ids,
+            preserve_backbone_trainability=True,
+            freeze_backbone=False,
+            **special_ids,
+            **kwargs,
+        )
 
 
 class CenterLoRAESM2(nn.Module):
@@ -1215,6 +1363,31 @@ def build_model(
             freeze_backbone=bool(model_config.get("freeze_backbone", True)),
             unfreeze_last_n_layers=int(
                 model_config.get("unfreeze_last_n_layers", 0)
+            ),
+        )
+    if architecture == "lora_esm2_hybrid_v1":
+        return LoRAESM2Hybrid.from_pretrained(
+            aaindex_lookup=aaindex_lookup,
+            pretrained_model_name=str(model_config["pretrained_model_name"]),
+            window_size=window_size,
+            branch_dim=int(model_config["branch_dim"]),
+            conv_channels=int(model_config["conv_channels"]),
+            conv_kernels=tuple(int(value) for value in model_config["conv_kernels"]),
+            conv_dilations=tuple(
+                int(value) for value in model_config["conv_dilations"]
+            ),
+            aaindex_gru_hidden_dim=int(
+                model_config.get("aaindex_gru_hidden_dim", 0)
+            ),
+            auxiliary_loss_weight=float(
+                model_config.get("auxiliary_loss_weight", 0.0)
+            ),
+            dropout=float(model_config["dropout"]),
+            lora_rank=int(model_config["lora_rank"]),
+            lora_alpha=int(model_config["lora_alpha"]),
+            lora_dropout=float(model_config["lora_dropout"]),
+            lora_target_modules=tuple(
+                str(value) for value in model_config["lora_target_modules"]
             ),
         )
     if architecture == "center_lora_esm2_v1":

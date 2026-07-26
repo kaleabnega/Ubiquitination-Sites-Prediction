@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import numpy as np
 import torch
@@ -19,6 +19,7 @@ from ubipred.model import (  # noqa: E402
     CenterLoRAESM2,
     CenterLoRAProtBERT,
     ESM2CrossFusion,
+    LoRAESM2Hybrid,
     MMUbiPredCompatible,
     MultiScaleCenterLoRAESM2,
     UbiFusionNet,
@@ -241,6 +242,95 @@ class ModelTests(unittest.TestCase):
         logits.sum().backward()
         self.assertIsNotNone(backbone.embedding.weight.grad)
 
+    def test_lora_esm2_hybrid_fuses_and_supervises_all_branches(self) -> None:
+        backbone = FakeESMBackbone()
+        model = LoRAESM2Hybrid(
+            aaindex_lookup=np.zeros((21, 31), dtype=np.float32),
+            backbone=backbone,
+            residue_token_lookup=list(range(4, 24)) + [0],
+            cls_token_id=1,
+            eos_token_id=2,
+            pad_token_id=0,
+            window_size=49,
+            branch_dim=16,
+            conv_channels=4,
+            conv_kernels=(3, 5, 7),
+            conv_dilations=(1, 2, 3),
+            aaindex_gru_hidden_dim=4,
+            auxiliary_loss_weight=0.2,
+            dropout=0.0,
+            preserve_backbone_trainability=True,
+            freeze_backbone=False,
+        )
+        tokens = torch.full((3, 49), 20, dtype=torch.long)
+        tokens[:, 8:41] = 0
+        tokens[:, 24] = 11
+        labels = torch.tensor([0.0, 1.0, 1.0])
+
+        logits, gates = model(tokens, return_gates=True)
+        loss = torch.nn.functional.binary_cross_entropy_with_logits(
+            logits, labels
+        ) + model.auxiliary_loss(labels)
+        loss.backward()
+
+        self.assertEqual(tuple(logits.shape), (3,))
+        self.assertEqual(tuple(gates.shape), (3, 3))
+        self.assertEqual(
+            model.branch_names,
+            ("esm2_context", "local_motif", "aaindex"),
+        )
+        torch.testing.assert_close(gates.sum(dim=1), torch.ones(3))
+        self.assertIsNotNone(backbone.embedding.weight.grad)
+        self.assertIsNotNone(model.local_convolutions[0][0].weight.grad)
+        self.assertIsNotNone(model.aaindex_gru.weight_ih_l0.grad)
+        self.assertIsNotNone(model.gate[0].weight.grad)
+        with self.assertRaisesRegex(RuntimeError, "preceding training forward"):
+            model.auxiliary_loss(labels)
+
+    def test_lora_esm2_hybrid_factory_preserves_peft_trainability(self) -> None:
+        fake_peft = ModuleType("peft")
+        fake_peft.LoraConfig = lambda **kwargs: SimpleNamespace(**kwargs)
+
+        def attach_lora(backbone: FakeESMBackbone, config: SimpleNamespace):
+            for parameter in backbone.parameters():
+                parameter.requires_grad = False
+            backbone.adapter = torch.nn.Parameter(torch.ones(1))
+            backbone.lora_config = config
+            return backbone
+
+        fake_peft.get_peft_model = attach_lora
+        fake_transformers = ModuleType("transformers")
+        fake_transformers.AutoModel = FakeAutoModel
+        fake_transformers.AutoTokenizer = FakeESMTokenizer
+
+        with patch.dict(
+            sys.modules,
+            {"peft": fake_peft, "transformers": fake_transformers},
+        ):
+            model = LoRAESM2Hybrid.from_pretrained(
+                aaindex_lookup=np.zeros((21, 31), dtype=np.float32),
+                pretrained_model_name="fake-esm",
+                lora_rank=8,
+                lora_alpha=16,
+                lora_dropout=0.1,
+                lora_target_modules=("query", "value"),
+                window_size=49,
+                branch_dim=16,
+                conv_channels=4,
+                conv_kernels=(3, 5, 7),
+                conv_dilations=(1, 2, 3),
+                aaindex_gru_hidden_dim=4,
+                auxiliary_loss_weight=0.2,
+                dropout=0.0,
+            )
+
+        self.assertFalse(model.esm_backbone.embedding.weight.requires_grad)
+        self.assertTrue(model.esm_backbone.adapter.requires_grad)
+        self.assertEqual(model.esm_backbone.lora_config.r, 8)
+        self.assertEqual(
+            model.esm_backbone.lora_config.target_modules, ["query", "value"]
+        )
+
     def test_center_lora_factory_configures_feature_extraction_lora(self) -> None:
         fake_peft = ModuleType("peft")
         fake_peft.LoraConfig = lambda **kwargs: SimpleNamespace(**kwargs)
@@ -391,6 +481,52 @@ class ModelTests(unittest.TestCase):
             classifier_hidden_dim=256,
             dropout=0.3,
             pooling_radii=(2, 5),
+            lora_rank=8,
+            lora_alpha=16,
+            lora_dropout=0.1,
+            lora_target_modules=("query", "value"),
+        )
+
+    def test_lora_esm2_hybrid_build_model_routes_frozen_configuration(self) -> None:
+        model_config = {
+            "architecture": "lora_esm2_hybrid_v1",
+            "pretrained_model_name": "facebook/esm2_t12_35M_UR50D",
+            "branch_dim": 128,
+            "conv_channels": 32,
+            "conv_kernels": [3, 5, 7],
+            "conv_dilations": [1, 2, 3],
+            "aaindex_gru_hidden_dim": 64,
+            "auxiliary_loss_weight": 0.2,
+            "dropout": 0.25,
+            "lora_rank": 8,
+            "lora_alpha": 16,
+            "lora_dropout": 0.1,
+            "lora_target_modules": ["query", "value"],
+        }
+        sentinel = object()
+        with patch.object(
+            LoRAESM2Hybrid,
+            "from_pretrained",
+            return_value=sentinel,
+        ) as factory:
+            model = build_model(
+                aaindex_lookup=np.zeros((21, 31), dtype=np.float32),
+                window_size=49,
+                model_config=model_config,
+            )
+
+        self.assertIs(model, sentinel)
+        factory.assert_called_once_with(
+            aaindex_lookup=ANY,
+            pretrained_model_name="facebook/esm2_t12_35M_UR50D",
+            window_size=49,
+            branch_dim=128,
+            conv_channels=32,
+            conv_kernels=(3, 5, 7),
+            conv_dilations=(1, 2, 3),
+            aaindex_gru_hidden_dim=64,
+            auxiliary_loss_weight=0.2,
+            dropout=0.25,
             lora_rank=8,
             lora_alpha=16,
             lora_dropout=0.1,
