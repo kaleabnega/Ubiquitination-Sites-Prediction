@@ -88,10 +88,14 @@ permission to reuse the historical test for architecture selection.
 
 The released MMUbiPred independent test has already been evaluated for the
 frozen ProtBERT candidate. It therefore cannot serve as an untouched
-independent test for this later hybrid. The notebook does not load it. If this
-architecture is frozen after development, publication-grade confirmation
-requires a newly curated, homology-aware blind external test set. The released
-test may only be reported as a transparently labelled historical benchmark.
+independent test for this later hybrid. The development screen does not load
+it. Notebook 08 contains a separate opt-in evaluation of the frozen
+development-best checkpoint solely for exploratory historical comparison.
+That result cannot reverse a STOP decision or guide another architecture. If
+this architecture were otherwise frozen after development, publication-grade
+confirmation would require a newly curated, homology-aware blind external test
+set. The released test may only be reported as a transparently labelled
+historical benchmark.
 
 ## External-pretraining disclosure
 

@@ -158,8 +158,11 @@ weak expert is not immediately suppressed by the gate.
 The predeclared seed-42 screen uses the identical protein-grouped development
 split as ESM-2 v1 and runs all 15 epochs. A performance GO requires matching or
 exceeding ProtBERT's fixed development MCC `0.58275`, while preserving the
-ESM-2 reference's selected MCC and ranking metrics. It does not load the
-released test.
+ESM-2 reference's selected MCC and ranking metrics. The screen does not load
+the released test. Notebook 08 also provides a separately acknowledged,
+one-time historical-test evaluation of the frozen development-best checkpoint;
+because the candidate failed its screen, that optional result is exploratory
+and cannot change the STOP decision.
 
 [Open the LoRA-ESM2 Hybrid v1 screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/08_LoRA_ESM2_Hybrid_v1_Screen_Colab.ipynb)
 

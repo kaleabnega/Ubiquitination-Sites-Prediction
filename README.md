@@ -180,6 +180,12 @@ The notebook:
 7. verifies that the comparison uses the identical validation split; and
 8. applies the predeclared decision rule without loading the released test.
 
+After the screen, a separate opt-in cell can evaluate the frozen
+development-best checkpoint once on the released test. Because Hybrid v1 was
+stopped on development and that test has already been examined for ProtBERT,
+the notebook labels this result exploratory and does not allow it to alter the
+selection decision.
+
 For this private repository, create a fine-grained GitHub token with read-only
 access, save it in Colab Secrets as `GITHUB_TOKEN`, and enable notebook access
 to the secret. The notebook uses a temporary Git askpass helper and does not
