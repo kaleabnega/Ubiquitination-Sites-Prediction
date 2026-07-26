@@ -74,6 +74,12 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--num-workers", type=int, default=2)
     parser.add_argument(
+        "--checkpoint-name",
+        choices=["best.pt", "development_best.pt"],
+        default="best.pt",
+        help="Frozen checkpoint within the run directory to evaluate.",
+    )
+    parser.add_argument(
         "--require-full-refit",
         action="store_true",
         help="Reject checkpoints not explicitly marked as complete-training refits.",
@@ -90,7 +96,7 @@ def main() -> None:
     data_dir = args.data_dir.resolve()
     ensure_locked_outputs_absent(run_dir)
 
-    checkpoint_path = run_dir / "best.pt"
+    checkpoint_path = run_dir / args.checkpoint_name
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
@@ -157,6 +163,19 @@ def main() -> None:
     results = {
         "status": "locked independent test evaluated",
         "checkpoint": str(checkpoint_path),
+        "checkpoint_role": (
+            "development-selected best checkpoint"
+            if args.checkpoint_name == "development_best.pt"
+            else "complete-training refit checkpoint"
+        ),
+        "training_scope": metadata.get(
+            "training_scope",
+            (
+                "development training subset"
+                if args.checkpoint_name == "development_best.pt"
+                else "unspecified"
+            ),
+        ),
         "checkpoint_sha256": sha256(checkpoint_path),
         "device": str(device),
         "preprocessing": {

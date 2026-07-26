@@ -8,9 +8,9 @@ experiment asks whether the result depends on the selected pretrained protein
 language model or whether ProtBERT-BFD provides a stronger central
 candidate-site representation.
 
-Only the pretrained backbone changes. The independent test remains locked.
-After this screen and any authorized paired confirmation, architecture
-selection closes permanently.
+Only the pretrained backbone changes. The independent test remained locked
+throughout the screen. After the passing result, architecture selection closed
+and a one-time evaluation of the frozen seed-42 checkpoint was authorized.
 
 ## Architecture and controlled comparison
 
@@ -97,14 +97,22 @@ impractical, the architecture was frozen after this passing screen. This is a
 resource-driven deviation from the preferred three-seed confirmation and must
 be disclosed as a limitation.
 
-The one-time independent-test protocol is fixed before test access:
+Before test access, the resource-constrained final protocol was revised to
+evaluate the already selected seed-42 checkpoint directly:
 
-1. initialize a fresh seed-42 CenterLoRA-ProtBERT v1 model;
-2. refit for exactly four epochs, the epoch count selected on development;
-3. use every one of the 91,723 released training records;
+1. use `development_best.pt`, the epoch-4 checkpoint selected without test
+   access;
+2. retain the 82,535-record fitting subset and 9,188-record development
+   validation subset exactly as used during selection;
+3. perform no additional training or full-data refit;
 4. report threshold 0.5 as the primary result;
 5. report the development-selected threshold 0.555 only as secondary; and
 6. evaluate once on the released 12,598-record independent test.
+
+This is a valid train/development/test protocol, but it uses fewer labelled
+training records than a complete-training refit. Both the single-seed evidence
+and the 10% development holdout must therefore be disclosed when comparing
+with the authors' model.
 
 No architecture, optimization setting, epoch count, or reporting threshold may
 change after this evaluation. Later seeds may repeat the identical frozen

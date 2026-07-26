@@ -30,7 +30,7 @@ MMUbiPred result on the locked independent test set.
 | Development champion | CenterLoRA-ESM2 v1 | MCC `0.56800 ± 0.00444` | Valid three-seed comparison |
 | Candidate 4 | MultiScale CenterLoRA-ESM2 v2 | MCC `0.57238`, seed 42 | Stopped by predeclared screen |
 | Final backbone screen | CenterLoRA-ProtBERT v1 | MCC `0.58275`, seed 42 | Passed; architecture frozen |
-| Final evaluation | CenterLoRA-ProtBERT v1 | Four-epoch complete-training refit | Independent test authorized, result pending |
+| Final evaluation | CenterLoRA-ProtBERT v1 | Existing seed-42 epoch-4 checkpoint | Independent test authorized, result pending |
 
 Candidate results above use protein-grouped development splits drawn only from
 the released training set. They are not independent-test results.
@@ -108,10 +108,12 @@ fixed MCC `0.58275`, selected MCC `0.58909`, AUROC `0.88719`, and AUPRC
 `0.90241`, without prediction collapse. Architecture selection is now closed.
 
 Because one ProtBERT development run required approximately six Colab GPU
-hours, immediate three-seed confirmation was deferred. The frozen final
-protocol refits seed 42 for the development-selected four epochs on all 91,723
-released training records and evaluates once on the independent test. This
-single-seed limitation is recorded prospectively and must be disclosed.
+hours, immediate three-seed confirmation and a new full-data refit were
+deferred. The frozen final protocol evaluates the existing development-best
+seed-42 checkpoint once on the independent test. It was fitted on 82,535
+records while 9,188 records were retained for development validation. These
+single-seed and reduced-fitting-set limitations are recorded prospectively and
+must be disclosed.
 
 Read the complete
 [CenterLoRA-ESM2 v1 method specification](experiment/methods/center_lora_esm2_v1.md)
@@ -143,9 +145,10 @@ experiments must not modify `replication/MMUbiPred`.
 
 ## Running the current experiment in Google Colab
 
-Training is designed for a Colab GPU runtime. The final workflow is:
+Training and evaluation are designed for a Colab GPU runtime. The final
+workflow is:
 
-[08_CenterLoRA_ProtBERT_Final_Test_Colab.ipynb](experiment/notebooks/08_CenterLoRA_ProtBERT_Final_Test_Colab.ipynb)
+[07_CenterLoRA_ProtBERT_v1_Screen_Colab.ipynb](experiment/notebooks/07_CenterLoRA_ProtBERT_v1_Screen_Colab.ipynb)
 
 The notebook:
 
@@ -155,11 +158,9 @@ The notebook:
 4. removes Colab’s incompatible optional `torchao` package, which the model
    does not use;
 5. runs the test suite; and
-6. verifies the frozen seed-42 development selection;
-7. refits for four epochs on the complete released training set with
-   epoch-boundary resume; and
-8. requires explicit acknowledgement before a non-overwriting one-time
-   independent-test evaluation.
+6. verifies the frozen seed-42 development selection; and
+7. requires explicit acknowledgement before evaluating the existing
+   development-best checkpoint once on the independent test.
 
 For this private repository, create a fine-grained GitHub token with read-only
 access, save it in Colab Secrets as `GITHUB_TOKEN`, and enable notebook access
