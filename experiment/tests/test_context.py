@@ -25,9 +25,9 @@ class ContextTests(unittest.TestCase):
         self.sequence = "A" * 50 + "K" + "C" * 70
         released = centered_sequence_window(self.sequence, 51, 49)
         self.record = SiteRecord(
-            header="P12345|51",
+            header="P12345|50",
             protein_id="P12345",
-            position=51,
+            position=50,
             sequence=released,
             label=1,
             source="test.fasta",
@@ -45,6 +45,7 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(len(contexts[0]), 257)
         self.assertEqual(contexts[0][128], "K")
         self.assertEqual(report["validated_fraction"], 1.0)
+        self.assertEqual(report["released_header_coordinate_system"], "zero_based")
 
         changed = list(self.sequence)
         changed[30] = "C"

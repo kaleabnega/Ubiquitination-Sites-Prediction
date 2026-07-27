@@ -21,8 +21,10 @@ Full sequences are retrieved through the
 [documented UniProt REST query API](https://www.uniprot.org/help/api_queries).
 Every site must have a
 valid position, a lysine at that position, and a 49-residue crop that exactly
-reproduces the released input. Failures are excluded from both experts,
-reported by reason, and hashed. The experiment stops below 95% coverage.
+reproduces the released input. The released PLMD/MMUbiPred header coordinates
+are zero-based and are converted explicitly to UniProt's one-based residue
+positions. Failures are excluded from both experts, reported by reason, and
+hashed. The experiment stops below 95% coverage.
 
 ## Architecture
 

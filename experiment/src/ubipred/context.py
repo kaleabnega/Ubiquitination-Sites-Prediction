@@ -69,16 +69,20 @@ def validate_and_build_context(
     if record.position is None:
         return ContextValidation(False, "missing_site_position", None)
     sequence = protein_sequence.strip().upper()
+    # The released MMUbiPred/PLMD headers store Python-style zero-based
+    # coordinates (for example, P16144|1020 is UniProt residue 1021). Convert
+    # explicitly before using the one-based UniProt sequence helper.
+    uniprot_position = record.position + 1
     try:
         released_window = centered_sequence_window(
-            sequence, record.position, len(record.sequence)
+            sequence, uniprot_position, len(record.sequence)
         )
         context = centered_sequence_window(
-            sequence, record.position, context_window_size
+            sequence, uniprot_position, context_window_size
         )
     except ValueError:
         return ContextValidation(False, "position_out_of_range", None)
-    if sequence[record.position - 1] != "K":
+    if sequence[uniprot_position - 1] != "K":
         return ContextValidation(False, "uniprot_center_is_not_lysine", None)
     if released_window != record.sequence:
         return ContextValidation(False, "released_window_mismatch", None)
@@ -150,6 +154,8 @@ def build_validated_contexts(
         "reason_counts": reason_counts,
         "issue_examples": issue_examples,
         "context_window_size": context_window_size,
+        "released_header_coordinate_system": "zero_based",
+        "uniprot_coordinate_system": "one_based",
     }
     return valid_indices, contexts, report
 
