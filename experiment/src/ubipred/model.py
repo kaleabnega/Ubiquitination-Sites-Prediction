@@ -816,14 +816,14 @@ class CenterLoRAESM2(nn.Module):
         if backbone_hidden_size <= 0 or classifier_hidden_dim <= 0:
             raise ValueError("hidden dimensions must be positive")
         residue_ids = torch.as_tensor(residue_token_lookup, dtype=torch.long)
-        if tuple(residue_ids.shape) != (21,):
+        if residue_ids.ndim != 1 or residue_ids.shape[0] < 21:
             raise ValueError(
                 "residue_token_lookup must contain the 20 amino acids and padding"
             )
 
         self.window_size = window_size
         self.center_index = window_size // 2
-        self.padding_index = 20
+        self.padding_index = int(residue_ids.shape[0] - 1)
         self.cls_token_id = int(cls_token_id)
         self.eos_token_id = int(eos_token_id)
         self.pad_token_id = int(pad_token_id)
@@ -850,6 +850,7 @@ class CenterLoRAESM2(nn.Module):
         tokenizer_use_fast: bool | None = None,
         tokenizer_vocab_filename: str | None = None,
         backbone_model_type: str | None = None,
+        extra_residues: Sequence[str] = (),
         **kwargs: object,
     ) -> "CenterLoRAESM2":
         if lora_rank <= 0 or lora_alpha <= 0:
@@ -891,6 +892,7 @@ class CenterLoRAESM2(nn.Module):
                 "[CLS]",
                 "[SEP]",
                 *cls.alphabet[:-1],
+                *extra_residues,
             }
             missing_tokens = sorted(required_tokens - vocabulary.keys())
             if missing_tokens:
@@ -903,7 +905,8 @@ class CenterLoRAESM2(nn.Module):
                 "pad_token_id": vocabulary["[PAD]"],
             }
             residue_ids = [
-                vocabulary[residue] for residue in cls.alphabet[:-1]
+                vocabulary[residue]
+                for residue in (*cls.alphabet[:-1], *extra_residues)
             ]
             residue_ids.append(vocabulary["[PAD]"])
         else:
@@ -929,7 +932,7 @@ class CenterLoRAESM2(nn.Module):
                 )
             residue_ids = [
                 int(tokenizer.convert_tokens_to_ids(residue))
-                for residue in cls.alphabet[:-1]
+                for residue in (*cls.alphabet[:-1], *extra_residues)
             ]
             if tokenizer.unk_token_id is not None and any(
                 token_id == tokenizer.unk_token_id for token_id in residue_ids
@@ -1194,6 +1197,137 @@ class MultiScaleCenterLoRAESM2(CenterLoRAESM2):
         return logits
 
 
+class LongContextLoRAESM2(CenterLoRAESM2):
+    """Target-aware ESM-2 expert over local and distal protein context.
+
+    A single LoRA-adapted backbone supplies the central lysine, a radius-24
+    local pool, and a masked global context pool. Their projected
+    representations are concatenated rather than competitively gated, so the
+    context expert cannot silently discard one scale during early training.
+    """
+
+    branch_names = ("esm2_center", "esm2_radius_24", "esm2_global")
+    diagnostic_name = "component_norm_fractions"
+
+    def __init__(
+        self,
+        backbone: nn.Module,
+        backbone_hidden_size: int,
+        residue_token_lookup: Sequence[int],
+        cls_token_id: int,
+        eos_token_id: int,
+        pad_token_id: int,
+        window_size: int = 257,
+        classifier_hidden_dim: int = 256,
+        dropout: float = 0.3,
+        local_radius: int = 24,
+        head_learning_rate_multiplier: float = 3.0,
+    ) -> None:
+        if local_radius <= 0 or local_radius > window_size // 2:
+            raise ValueError("local_radius must fit inside the context window")
+        if head_learning_rate_multiplier <= 0:
+            raise ValueError("head_learning_rate_multiplier must be positive")
+        super().__init__(
+            backbone=backbone,
+            backbone_hidden_size=backbone_hidden_size,
+            residue_token_lookup=residue_token_lookup,
+            cls_token_id=cls_token_id,
+            eos_token_id=eos_token_id,
+            pad_token_id=pad_token_id,
+            window_size=window_size,
+            classifier_hidden_dim=classifier_hidden_dim,
+            dropout=dropout,
+        )
+        self.local_radius = int(local_radius)
+        self.head_learning_rate_multiplier = float(head_learning_rate_multiplier)
+        self.component_projection = nn.Sequential(
+            nn.LayerNorm(backbone_hidden_size),
+            nn.Linear(backbone_hidden_size, classifier_hidden_dim),
+            nn.GELU(),
+        )
+        self.classifier = nn.Sequential(
+            nn.LayerNorm(classifier_hidden_dim * 3),
+            nn.Dropout(dropout),
+            nn.Linear(classifier_hidden_dim * 3, classifier_hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(classifier_hidden_dim, 1),
+        )
+
+    def optimizer_parameter_groups(
+        self, base_learning_rate: float
+    ) -> list[dict[str, object]]:
+        backbone_parameters = [
+            parameter
+            for parameter in self.esm_backbone.parameters()
+            if parameter.requires_grad
+        ]
+        head_parameters = [
+            parameter
+            for name, parameter in self.named_parameters()
+            if parameter.requires_grad and not name.startswith("esm_backbone.")
+        ]
+        return [
+            {"params": backbone_parameters, "lr": base_learning_rate},
+            {
+                "params": head_parameters,
+                "lr": base_learning_rate * self.head_learning_rate_multiplier,
+            },
+        ]
+
+    @staticmethod
+    def _masked_global_mean(
+        features: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
+        residue_mask = attention_mask.clone()
+        residue_mask[:, 0] = 0
+        residue_lengths = residue_mask.sum(dim=1) - 1
+        row_indices = torch.arange(features.shape[0], device=features.device)
+        eos_positions = attention_mask.sum(dim=1) - 1
+        residue_mask[row_indices, eos_positions] = 0
+        weights = residue_mask.unsqueeze(-1).to(features.dtype)
+        return (features * weights).sum(dim=1) / residue_lengths.clamp_min(1).unsqueeze(
+            1
+        )
+
+    def forward(
+        self, tokens: torch.Tensor, return_gates: bool = False
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        if tokens.ndim != 2 or tokens.shape[1] != self.window_size:
+            raise ValueError(
+                f"Expected token shape (batch, {self.window_size}), got {tokens.shape}"
+            )
+        esm_ids, attention_mask, center_positions = self._esm_inputs(tokens)
+        features = self.esm_backbone(
+            input_ids=esm_ids,
+            attention_mask=attention_mask,
+        ).last_hidden_state
+        batch_indices = torch.arange(tokens.shape[0], device=tokens.device)
+        residue_lengths = attention_mask.sum(dim=1) - 2
+        components = torch.stack(
+            [
+                features[batch_indices, center_positions],
+                MultiScaleCenterLoRAESM2._centered_mean_pool(
+                    features,
+                    center_positions,
+                    residue_lengths,
+                    self.local_radius,
+                ),
+                self._masked_global_mean(features, attention_mask),
+            ],
+            dim=1,
+        )
+        projected = self.component_projection(components)
+        logits = self.classifier(projected.flatten(start_dim=1)).squeeze(-1)
+        component_norms = projected.norm(dim=-1).clamp_min(1e-8)
+        diagnostics = component_norms / component_norms.sum(
+            dim=1, keepdim=True
+        )
+        if return_gates:
+            return logits, diagnostics
+        return logits
+
+
 class MMUbiPredCompatible(nn.Module):
     """PyTorch reimplementation of the released three-branch topology.
 
@@ -1444,6 +1578,24 @@ def build_model(
             pooling_radii=tuple(
                 int(value) for value in model_config["pooling_radii"]
             ),
+            lora_rank=int(model_config["lora_rank"]),
+            lora_alpha=int(model_config["lora_alpha"]),
+            lora_dropout=float(model_config["lora_dropout"]),
+            lora_target_modules=tuple(
+                str(value) for value in model_config["lora_target_modules"]
+            ),
+        )
+    if architecture == "long_context_lora_esm2_v1":
+        return LongContextLoRAESM2.from_pretrained(
+            pretrained_model_name=str(model_config["pretrained_model_name"]),
+            window_size=window_size,
+            classifier_hidden_dim=int(model_config["classifier_hidden_dim"]),
+            dropout=float(model_config["dropout"]),
+            local_radius=int(model_config.get("local_radius", 24)),
+            head_learning_rate_multiplier=float(
+                model_config.get("head_learning_rate_multiplier", 3.0)
+            ),
+            extra_residues=("X", "B", "U", "Z", "O"),
             lora_rank=int(model_config["lora_rank"]),
             lora_alpha=int(model_config["lora_alpha"]),
             lora_dropout=float(model_config["lora_dropout"]),

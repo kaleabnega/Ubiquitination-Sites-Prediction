@@ -169,6 +169,25 @@ and cannot change the STOP decision.
 The complete contract is in
 [`methods/lora_esm2_hybrid_v1.md`](methods/lora_esm2_hybrid_v1.md).
 
+## Current architecture: MMUbiPred–Context Residual v1
+
+This experiment preserves the complete paper-compatible MMUbiPred topology as
+a 49-residue local expert and pairs it with a target-aware rank-8 LoRA ESM-2
+expert over validated 257-residue UniProt context. Their logits are combined
+by a low-capacity, nonnegative residual stacker regularized toward the local
+expert.
+
+Five protein-grouped outer folds generate predictions never seen during
+expert training or checkpoint selection. A second cross-fit evaluates the
+stacker without fitting it on the fold being reported. Sequence retrieval is
+resumable, every full sequence must reproduce the released site window, and
+the released independent test is absent from this workflow.
+
+[Open MMUbiPred–Context Residual v1 in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/09_MMUbiPred_Context_Residual_v1_Colab.ipynb)
+
+See the frozen
+[`method and decision contract`](methods/mmubipred_context_residual_v1.md).
+
 ## Layout
 
 ```text

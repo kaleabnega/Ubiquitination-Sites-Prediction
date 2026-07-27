@@ -20,6 +20,7 @@ from ubipred.model import (  # noqa: E402
     CenterLoRAProtBERT,
     ESM2CrossFusion,
     LoRAESM2Hybrid,
+    LongContextLoRAESM2,
     MMUbiPredCompatible,
     MultiScaleCenterLoRAESM2,
     UbiFusionNet,
@@ -450,6 +451,35 @@ class ModelTests(unittest.TestCase):
         # Positions 1, 2, and 3 are residues; position 0 is CLS and 4 is EOS.
         torch.testing.assert_close(pooled, torch.tensor([[2.0]]))
 
+    def test_long_context_model_uses_center_local_and_global_components(self) -> None:
+        backbone = FakeESMBackbone()
+        model = LongContextLoRAESM2(
+            backbone=backbone,
+            backbone_hidden_size=16,
+            residue_token_lookup=list(range(4, 29)) + [0],
+            cls_token_id=1,
+            eos_token_id=2,
+            pad_token_id=0,
+            window_size=257,
+            classifier_hidden_dim=8,
+            dropout=0.0,
+            local_radius=24,
+        )
+        tokens = torch.full((2, 257), 25, dtype=torch.long)
+        tokens[:, 80:180] = 0
+        tokens[:, 128] = 11
+        tokens[:, 100] = 20  # X is retained as a residue, not compacted as padding.
+
+        esm_ids, attention_mask, center_positions = model._esm_inputs(tokens)
+        self.assertEqual(attention_mask.sum(dim=1).tolist(), [102, 102])
+        self.assertEqual(center_positions.tolist(), [49, 49])
+        logits, diagnostics = model(tokens, return_gates=True)
+        self.assertEqual(tuple(logits.shape), (2,))
+        self.assertEqual(tuple(diagnostics.shape), (2, 3))
+        torch.testing.assert_close(diagnostics.sum(dim=1), torch.ones(2))
+        logits.sum().backward()
+        self.assertIsNotNone(backbone.embedding.weight.grad)
+
     def test_multiscale_build_model_routes_frozen_configuration(self) -> None:
         model_config = {
             "architecture": "center_lora_esm2_multiscale_v2",
@@ -481,6 +511,46 @@ class ModelTests(unittest.TestCase):
             classifier_hidden_dim=256,
             dropout=0.3,
             pooling_radii=(2, 5),
+            lora_rank=8,
+            lora_alpha=16,
+            lora_dropout=0.1,
+            lora_target_modules=("query", "value"),
+        )
+
+    def test_long_context_build_model_routes_frozen_configuration(self) -> None:
+        model_config = {
+            "architecture": "long_context_lora_esm2_v1",
+            "pretrained_model_name": "fake-esm",
+            "classifier_hidden_dim": 256,
+            "dropout": 0.3,
+            "local_radius": 24,
+            "head_learning_rate_multiplier": 3.0,
+            "lora_rank": 8,
+            "lora_alpha": 16,
+            "lora_dropout": 0.1,
+            "lora_target_modules": ["query", "value"],
+        }
+        sentinel = object()
+        with patch.object(
+            LongContextLoRAESM2,
+            "from_pretrained",
+            return_value=sentinel,
+        ) as factory:
+            model = build_model(
+                aaindex_lookup=np.zeros((21, 31), dtype=np.float32),
+                window_size=257,
+                model_config=model_config,
+            )
+
+        self.assertIs(model, sentinel)
+        factory.assert_called_once_with(
+            pretrained_model_name="fake-esm",
+            window_size=257,
+            classifier_hidden_dim=256,
+            dropout=0.3,
+            local_radius=24,
+            head_learning_rate_multiplier=3.0,
+            extra_residues=("X", "B", "U", "Z", "O"),
             lora_rank=8,
             lora_alpha=16,
             lora_dropout=0.1,

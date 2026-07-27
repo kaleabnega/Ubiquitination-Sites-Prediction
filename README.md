@@ -32,7 +32,8 @@ MMUbiPred.
 | Candidate 4 | MultiScale CenterLoRA-ESM2 v2 | MCC `0.57238`, seed 42 | Stopped by predeclared screen |
 | Backbone screen | CenterLoRA-ProtBERT v1 | MCC `0.58275`, seed 42 | Passed development screen |
 | Historical-test evaluation | CenterLoRA-ProtBERT v1 | MCC `0.54997`, seed 42 | Numerical gain of `0.00413`; inconclusive |
-| Current screen | LoRA-ESM2 Hybrid v1 | Seed-42 development protocol | Ready to run |
+| Candidate 5 | LoRA-ESM2 Hybrid v1 | Development MCC `0.57165`; historical-test MCC `0.53616` | Rejected |
+| Current architecture | MMUbiPred–Context Residual v1 | Five-fold OOF protocol | Ready to run |
 
 Architecture-screen results above use protein-grouped development splits drawn
 only from the released training set. The separately labelled historical-test
@@ -123,13 +124,12 @@ decreased. This is a numerical MCC win, not compelling evidence of a generally
 better model, especially because it is one seed fitted on only 82,535 of the
 91,723 released training records.
 
-The current development-only experiment returns to the faster ESM-2 35M
-backbone and adds two explicitly complementary experts: a dilated local-motif
-CNN and a bidirectional-AAindex encoder. Learned feature-level gating, residual
-fusion, and auxiliary branch supervision combine them. The seed-42 screen uses
-only the established protein-grouped development split and does not read the
-released test. It must materially beat CenterLoRA-ESM2 v1 and match the
-ProtBERT development MCC before it can become the new performance candidate.
+The current experiment preserves the complete paper-compatible MMUbiPred
+topology as a local expert and adds a rank-8 LoRA ESM-2 expert over validated
+257-residue UniProt context. A nonnegative residual stack combines their
+logits. Five protein-grouped outer folds and a second stacker cross-fit provide
+a stronger development estimate than another seed-42 screen. The released
+test is not loaded.
 
 Read the complete
 [CenterLoRA-ESM2 v1 method specification](experiment/methods/center_lora_esm2_v1.md)
@@ -137,6 +137,8 @@ and the
 [MultiScale v2 screen result](experiment/results/2026-07-26-center-lora-esm2-multiscale-v2-screen/README.md).
 The hybrid protocol is specified in
 [LoRA-ESM2 Hybrid v1](experiment/methods/lora_esm2_hybrid_v1.md).
+The current protocol is specified in
+[MMUbiPred–Context Residual v1](experiment/methods/mmubipred_context_residual_v1.md).
 
 ## Repository layout
 
@@ -166,7 +168,7 @@ experiments must not modify `replication/MMUbiPred`.
 Training and evaluation are designed for a Colab GPU runtime. The current
 development workflow is:
 
-[08_LoRA_ESM2_Hybrid_v1_Screen_Colab.ipynb](experiment/notebooks/08_LoRA_ESM2_Hybrid_v1_Screen_Colab.ipynb)
+[09_MMUbiPred_Context_Residual_v1_Colab.ipynb](experiment/notebooks/09_MMUbiPred_Context_Residual_v1_Colab.ipynb)
 
 The notebook:
 
@@ -176,15 +178,11 @@ The notebook:
 4. removes Colab’s incompatible optional `torchao` package, which the model
    does not use;
 5. runs the test suite;
-6. resumes or runs the 15-epoch seed-42 development screen;
-7. verifies that the comparison uses the identical validation split; and
-8. applies the predeclared decision rule without loading the released test.
-
-After the screen, a separate opt-in cell can evaluate the frozen
-development-best checkpoint once on the released test. Because Hybrid v1 was
-stopped on development and that test has already been examined for ProtBERT,
-the notebook labels this result exploratory and does not allow it to alter the
-selection decision.
+6. retrieves and validates full UniProt sequences into a Drive cache;
+7. runs or resumes one or more of five outer folds;
+8. creates fold-safe OOF predictions for both experts; and
+9. evaluates the residual stack through a second cross-fit without loading the
+   released test.
 
 For this private repository, create a fine-grained GitHub token with read-only
 access, save it in Colab Secrets as `GITHUB_TOKEN`, and enable notebook access

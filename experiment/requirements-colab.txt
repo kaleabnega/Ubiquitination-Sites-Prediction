@@ -6,3 +6,4 @@ scikit-learn>=1.4,<2
 transformers==5.14.1
 safetensors>=0.4,<1
 peft==0.19.1
+requests>=2.31,<3

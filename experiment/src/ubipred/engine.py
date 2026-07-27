@@ -27,7 +27,14 @@ def _build_optimizer(
 ) -> torch.optim.Optimizer:
     if epsilon <= 0:
         raise ValueError("optimizer epsilon must be positive")
-    parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    parameter_group_factory = getattr(model, "optimizer_parameter_groups", None)
+    parameters: object
+    if callable(parameter_group_factory):
+        parameters = parameter_group_factory(learning_rate)
+    else:
+        parameters = [
+            parameter for parameter in model.parameters() if parameter.requires_grad
+        ]
     if name == "adam":
         return torch.optim.Adam(
             parameters,
