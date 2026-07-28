@@ -392,6 +392,8 @@ def refit_model(
     checkpoint_metadata: dict[str, object],
     resume: bool = False,
     compact_checkpoint: bool = False,
+    resume_source_path: str | Path | None = None,
+    resume_source_metadata: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Refit a fresh model on every released training sample.
 
@@ -411,6 +413,12 @@ def refit_model(
             "Exact epoch-boundary resume requires num_workers=0 so DataLoader "
             "generator consumption is reproducible"
         )
+    if resume_source_path is not None and not resume:
+        raise ValueError("resume_source_path requires resume=True")
+    if resume_source_metadata is not None and resume_source_path is None:
+        raise ValueError(
+            "resume_source_metadata requires resume_source_path"
+        )
 
     run_dir = Path(output_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -428,20 +436,42 @@ def refit_model(
     history: list[dict[str, object]] = []
     start_epoch = 1
     resume_path = run_dir / "refit_resume.pt"
+    loaded_resume_path: Path | None = None
 
     if resume and resume_path.exists():
-        resume_checkpoint = torch.load(
-            resume_path, map_location="cpu", weights_only=False
+        loaded_resume_path = resume_path
+        expected_resume_metadata = checkpoint_metadata
+    elif resume and resume_source_path is not None:
+        loaded_resume_path = Path(resume_source_path)
+        if not loaded_resume_path.exists():
+            raise FileNotFoundError(
+                f"Parent refit resume checkpoint not found: {loaded_resume_path}"
+            )
+        expected_resume_metadata = (
+            resume_source_metadata
+            if resume_source_metadata is not None
+            else checkpoint_metadata
         )
-        if resume_checkpoint["metadata"] != checkpoint_metadata:
+
+    if loaded_resume_path is not None:
+        resume_checkpoint = torch.load(
+            loaded_resume_path, map_location="cpu", weights_only=False
+        )
+        if resume_checkpoint["metadata"] != expected_resume_metadata:
             raise ValueError(
                 "Resume checkpoint metadata does not match this code/configuration"
+            )
+        completed_epoch = int(resume_checkpoint["completed_epoch"])
+        if completed_epoch >= epochs:
+            raise ValueError(
+                "Resume checkpoint already reached or exceeded the requested "
+                f"duration: completed={completed_epoch}, requested={epochs}"
             )
         _load_trainable_state(model, resume_checkpoint["model_state_dict"])
         optimizer.load_state_dict(resume_checkpoint["optimizer_state_dict"])
         scaler.load_state_dict(resume_checkpoint["scaler_state_dict"])
         history = list(resume_checkpoint["history"])
-        start_epoch = int(resume_checkpoint["completed_epoch"]) + 1
+        start_epoch = completed_epoch + 1
         random.setstate(resume_checkpoint["python_rng_state"])
         np.random.set_state(resume_checkpoint["numpy_rng_state"])
         torch.set_rng_state(resume_checkpoint["torch_rng_state"])
@@ -560,6 +590,9 @@ def refit_model(
         "checkpoint": "best.pt",
         "state_dict_scope": state_dict_scope,
         "resumed": bool(resume and start_epoch > 1),
+        "resume_source": (
+            str(loaded_resume_path) if loaded_resume_path is not None else None
+        ),
     }
     write_json(run_dir / "refit_summary.json", summary)
     return summary

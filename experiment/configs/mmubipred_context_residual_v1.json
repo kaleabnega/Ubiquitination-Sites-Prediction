@@ -23,6 +23,14 @@
     "epoch_selection_rule": "integer median of the five context-fold inner-validation best epochs",
     "source_best_epochs": [8, 8, 7, 6, 7]
   },
+  "exploratory_epoch_extension": {
+    "experiment_name": "mmubipred_context_only_epoch15_exploratory",
+    "output_dir": "/content/drive/MyDrive/MMUbiPred-research/experiments/mmubipred-context-only-epoch15-exploratory-seed42",
+    "source_epochs": 7,
+    "target_epochs": 15,
+    "historical_test_informed": true,
+    "only_changed_factor": "training duration"
+  },
   "local_expert": {
     "inner_validation_fraction": 0.1,
     "batch_size": 32,

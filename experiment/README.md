@@ -207,6 +207,11 @@ once at threshold `0.5`. If context validation excludes any test record, the
 notebook marks comparison with the paper's full-cohort aggregate as invalid
 until MMUbiPred is evaluated on the same retained indices.
 
+Notebook 09 also contains a clearly separated post-test exploratory duration
+ablation. It preserves the epoch-7 run and restores its exact training state
+in a new directory before continuing epochs 8–15. Its outputs are permanently
+marked test-informed and cannot replace the frozen primary result.
+
 ## Layout
 
 ```text

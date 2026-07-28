@@ -152,3 +152,17 @@ the reproduced full-test MMUbiPred aggregate is valid only if every processed
 test record passes context validation. Otherwise, the primary comparison
 requires MMUbiPred predictions restricted to the exact saved context-valid
 test indices.
+
+## Post-test exploratory epoch extension
+
+After the epoch-7 historical-test result was inspected, an explicitly
+exploratory duration ablation was added to test whether the final refit had
+been undertrained. It restores the exact epoch-7 model, AdamW optimizer, AMP
+scaler, DataLoader generator, and random-number-generator states, then
+continues epochs 8–15. The frozen run is never modified, and no learning rate,
+loss, model, seed, data, batch, accumulation, or threshold setting changes.
+
+Because training duration was reconsidered after observing the historical
+test, the epoch-15 result cannot replace the epoch-7 primary result or support
+a confirmatory superiority claim. It is recorded as test-informed exploratory
+evidence and would require confirmation on a new external test set.

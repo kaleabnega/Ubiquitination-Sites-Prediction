@@ -206,9 +206,20 @@ def main() -> None:
         )
         for metric in comparison_metrics
     }
+    is_test_informed_exploration = bool(
+        context_result.get("historical_test_informed_exploration", False)
+    )
     results = {
-        "status": "valid matched-cohort historical-test comparison",
+        "status": (
+            "valid matched-cohort post-test exploratory comparison"
+            if is_test_informed_exploration
+            else "valid matched-cohort historical-test comparison"
+        ),
         "comparison_valid": True,
+        "historical_test_informed_exploration": (
+            is_test_informed_exploration
+        ),
+        "confirmatory_claim_allowed": not is_test_informed_exploration,
         "primary_threshold": 0.5,
         "matched_test_indices_sha256": expected_indices_hash,
         "matched_support": context_matched_metrics["support"],

@@ -77,6 +77,16 @@ def main() -> None:
     parser.add_argument("--sequence-cache", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=0)
+    parser.add_argument("--expected-experiment")
+    parser.add_argument("--expected-refit-epochs", type=int)
+    parser.add_argument(
+        "--allow-test-informed-exploration",
+        action="store_true",
+        help=(
+            "Acknowledge that this checkpoint was designed after inspecting "
+            "the historical test and cannot support a confirmatory claim."
+        ),
+    )
     parser.add_argument(
         "--allow-locked-test",
         action="store_true",
@@ -111,9 +121,29 @@ def main() -> None:
     if not isinstance(metadata, dict):
         raise TypeError("Frozen checkpoint metadata is missing")
     final_config = dict(config["final_context_refit"])
-    if metadata.get("experiment") != final_config["experiment_name"]:
-        raise ValueError("Checkpoint is not the frozen context-only candidate")
-    if int(checkpoint.get("refit_epochs", -1)) != int(final_config["epochs"]):
+    expected_experiment = (
+        args.expected_experiment or str(final_config["experiment_name"])
+    )
+    expected_refit_epochs = (
+        args.expected_refit_epochs
+        if args.expected_refit_epochs is not None
+        else int(final_config["epochs"])
+    )
+    is_test_informed_exploration = (
+        expected_experiment != final_config["experiment_name"]
+        or expected_refit_epochs != int(final_config["epochs"])
+    )
+    if (
+        is_test_informed_exploration
+        and not args.allow_test_informed_exploration
+    ):
+        raise ValueError(
+            "Non-frozen checkpoint evaluation requires explicit "
+            "--allow-test-informed-exploration acknowledgement"
+        )
+    if metadata.get("experiment") != expected_experiment:
+        raise ValueError("Checkpoint experiment identity does not match")
+    if int(checkpoint.get("refit_epochs", -1)) != expected_refit_epochs:
         raise ValueError("Checkpoint refit duration does not match the protocol")
     if checkpoint.get("state_dict_scope") != "trainable_parameters":
         raise ValueError("Expected a compact trainable-parameter checkpoint")
@@ -200,10 +230,22 @@ def main() -> None:
         getattr(model, "diagnostic_name", "branch_diagnostics")
     )
     results = {
-        "status": "frozen context-only historical test evaluated",
+        "status": (
+            "post-test exploratory context model evaluated"
+            if is_test_informed_exploration
+            else "frozen context-only historical test evaluated"
+        ),
+        "historical_test_informed_exploration": (
+            is_test_informed_exploration
+        ),
+        "confirmatory_claim_allowed": not is_test_informed_exploration,
         "checkpoint": str(checkpoint_path),
         "checkpoint_sha256": sha256_file(checkpoint_path),
-        "checkpoint_role": "fixed seven-epoch full-data refit",
+        "checkpoint_role": (
+            f"post-test exploratory epoch-{expected_refit_epochs} extension"
+            if is_test_informed_exploration
+            else "fixed seven-epoch full-data refit"
+        ),
         "training_scope": (
             "all released training records passing frozen context validation"
         ),
@@ -226,6 +268,12 @@ def main() -> None:
         "historical_full_paper_baseline": PAPER_BASELINE,
         "direct_full_cohort_paper_comparison_valid": (
             full_cohort_comparison_valid
+        ),
+        "comparison_scope": (
+            "exploratory only; training duration was chosen after the "
+            "historical test was inspected"
+            if is_test_informed_exploration
+            else "frozen primary historical-test evaluation"
         ),
         "fixed_threshold_difference_from_full_paper_baseline": (
             difference_from_paper
@@ -296,6 +344,9 @@ def main() -> None:
         "predictions_table": table_path.name,
         "direct_full_cohort_paper_comparison_valid": (
             full_cohort_comparison_valid
+        ),
+        "historical_test_informed_exploration": (
+            is_test_informed_exploration
         ),
     }
     write_json(manifest_path, refit_manifest)

@@ -104,6 +104,9 @@ def run_tiny_refit(
     output_dir: Path,
     epochs: int,
     resume: bool,
+    metadata: dict[str, object] | None = None,
+    resume_source_path: Path | None = None,
+    resume_source_metadata: dict[str, object] | None = None,
 ) -> dict[str, object]:
     return refit_model(
         model=model,
@@ -119,9 +122,12 @@ def run_tiny_refit(
         gradient_accumulation_steps=2,
         use_amp=False,
         validation_selected_threshold=0.5,
-        checkpoint_metadata={"protocol": "tiny_exact_resume", "target_epochs": 3},
+        checkpoint_metadata=metadata
+        or {"protocol": "tiny_exact_resume", "target_epochs": 3},
         resume=resume,
         compact_checkpoint=True,
+        resume_source_path=resume_source_path,
+        resume_source_metadata=resume_source_metadata,
     )
 
 
@@ -247,6 +253,80 @@ class FinalProtocolTests(unittest.TestCase):
                 ),
                 3,
             )
+
+    def test_refit_can_continue_verified_parent_under_new_provenance(self) -> None:
+        torch.manual_seed(23)
+        initial_state = {
+            name: value.detach().clone()
+            for name, value in TinyRefitModel().state_dict().items()
+        }
+        source_metadata = {"experiment": "frozen", "epochs": 2}
+        target_metadata = {
+            "experiment": "post_test_exploration",
+            "epochs": 3,
+            "parent": source_metadata,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            torch.manual_seed(29)
+            uninterrupted = TinyRefitModel()
+            uninterrupted.load_state_dict(initial_state)
+            run_tiny_refit(
+                uninterrupted,
+                tiny_loader(29),
+                root / "uninterrupted",
+                epochs=3,
+                resume=False,
+                metadata=target_metadata,
+            )
+
+            torch.manual_seed(29)
+            source = TinyRefitModel()
+            source.load_state_dict(initial_state)
+            run_tiny_refit(
+                source,
+                tiny_loader(29),
+                root / "source",
+                epochs=2,
+                resume=False,
+                metadata=source_metadata,
+            )
+
+            torch.manual_seed(999)
+            extended = TinyRefitModel()
+            run_tiny_refit(
+                extended,
+                tiny_loader(999),
+                root / "extension",
+                epochs=3,
+                resume=True,
+                metadata=target_metadata,
+                resume_source_path=root / "source" / "refit_resume.pt",
+                resume_source_metadata=source_metadata,
+            )
+
+            uninterrupted_checkpoint = torch.load(
+                root / "uninterrupted" / "best.pt",
+                map_location="cpu",
+                weights_only=False,
+            )
+            extended_checkpoint = torch.load(
+                root / "extension" / "best.pt",
+                map_location="cpu",
+                weights_only=False,
+            )
+            self.assertEqual(extended_checkpoint["metadata"], target_metadata)
+            for name, value in uninterrupted_checkpoint[
+                "model_state_dict"
+            ].items():
+                self.assertTrue(
+                    torch.equal(
+                        value,
+                        extended_checkpoint["model_state_dict"][name],
+                    ),
+                    msg=name,
+                )
 
 
 if __name__ == "__main__":
