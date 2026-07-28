@@ -193,7 +193,9 @@ The notebook:
 9. evaluates the residual stack through a second cross-fit without loading the
    released test; and
 10. runs the frozen seven-epoch context-only full-data refit after the corrected
-    decision is `ADVANCE_CONTEXT_ONLY`.
+    decision is `ADVANCE_CONTEXT_ONLY`; and
+11. provides a guarded one-time historical-test evaluation that validates test
+    context coverage before reporting the fixed-threshold result.
 
 For this private repository, create a fine-grained GitHub token with read-only
 access, save it in Colab Secrets as `GITHUB_TOKEN`, and enable notebook access

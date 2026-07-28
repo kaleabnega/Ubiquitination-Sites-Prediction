@@ -29,6 +29,18 @@ evaluate = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = evaluate
 SPEC.loader.exec_module(evaluate)
 
+CONTEXT_SCRIPT_PATH = (
+    PROJECT_ROOT / "experiment" / "scripts" / "evaluate_context_candidate.py"
+)
+CONTEXT_SPEC = importlib.util.spec_from_file_location(
+    "evaluate_context_candidate", CONTEXT_SCRIPT_PATH
+)
+if CONTEXT_SPEC is None or CONTEXT_SPEC.loader is None:
+    raise RuntimeError(f"Could not import {CONTEXT_SCRIPT_PATH}")
+evaluate_context = importlib.util.module_from_spec(CONTEXT_SPEC)
+sys.modules[CONTEXT_SPEC.name] = evaluate_context
+CONTEXT_SPEC.loader.exec_module(evaluate_context)
+
 
 class TinyModel(nn.Module):
     def __init__(self) -> None:
@@ -110,6 +122,15 @@ class FinalProtocolTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(FileExistsError, "Refusing to repeat"):
                 evaluate.ensure_locked_outputs_absent(run_dir)
+
+    def test_context_test_cannot_be_repeated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            (run_dir / "context_test_metrics.json").write_text(
+                "{}", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(FileExistsError, "Refusing to repeat"):
+                evaluate_context.ensure_outputs_absent(run_dir)
 
     def test_development_trainable_checkpoint_loads(self) -> None:
         source = TinyModel()

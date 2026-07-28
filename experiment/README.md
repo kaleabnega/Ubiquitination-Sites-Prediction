@@ -201,7 +201,11 @@ The five context-fold best epochs `[8, 8, 7, 6, 7]` freeze the final duration
 at their integer median, seven epochs. Notebook 09 now includes a resumable
 full-data refit of a fresh context-only model on the 89,551 released training
 sites that passed exact context validation. It uses no validation or test
-loader.
+loader. After the refit is complete, a separately guarded section retrieves
+and validates independent-test contexts and evaluates the frozen checkpoint
+once at threshold `0.5`. If context validation excludes any test record, the
+notebook marks comparison with the paper's full-cohort aggregate as invalid
+until MMUbiPred is evaluated on the same retained indices.
 
 ## Layout
 

@@ -142,3 +142,13 @@ The refit writes an exact epoch-boundary resume checkpoint after every epoch.
 Its final compact checkpoint stores the trainable LoRA and task-head
 parameters plus immutable model, cache, decision-summary, and eligible-record
 hashes. Re-running with `--resume` continues from the next unfinished epoch.
+
+The frozen checkpoint may then be evaluated once on reconstructed
+independent-test contexts at the primary threshold `0.5`. Test sequence
+retrieval uses a separate hashed Drive cache and applies the identical
+coordinate, central-lysine, released-49-mer, and residue-alphabet validation.
+Coverage and every exclusion reason are reported. A direct comparison with
+the reproduced full-test MMUbiPred aggregate is valid only if every processed
+test record passes context validation. Otherwise, the primary comparison
+requires MMUbiPred predictions restricted to the exact saved context-valid
+test indices.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch and validate full UniProt sequences for the released training sites."""
+"""Fetch and validate full UniProt sequences for a released data split."""
 
 from __future__ import annotations
 
@@ -101,6 +101,16 @@ def fetch_batch(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", default="replication/MMUbiPred")
+    parser.add_argument(
+        "--split",
+        choices=("train", "test"),
+        default="train",
+    )
+    parser.add_argument(
+        "--allow-locked-test",
+        action="store_true",
+        help="Required acknowledgement when retrieving test-site context.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--validation-report", type=Path)
     parser.add_argument("--context-window-size", type=int, default=257)
@@ -110,6 +120,11 @@ def main() -> None:
     args = parser.parse_args()
     if args.batch_size <= 0 or args.batch_size > 100:
         raise ValueError("batch-size must be between 1 and 100")
+    if args.split == "test" and not args.allow_locked_test:
+        parser.error(
+            "Refusing to access independent-test site identifiers without "
+            "--allow-locked-test"
+        )
 
     data_dir = resolve_project_path(args.data_dir)
     output = resolve_project_path(args.output)
@@ -119,7 +134,7 @@ def main() -> None:
         else output.with_name("context_validation.json")
     )
     records, preprocessing = load_released_split(
-        data_dir, split="train", window_size=49
+        data_dir, split=args.split, window_size=49
     )
     required_accessions = sorted({record.protein_id for record in records})
 
@@ -176,6 +191,7 @@ def main() -> None:
         context_window_size=args.context_window_size,
     )
     report = {
+        "split": args.split,
         "source": UNIPROT_SEARCH_URL,
         "sequence_cache": str(output),
         "required_unique_accessions": len(required_accessions),
@@ -189,11 +205,14 @@ def main() -> None:
         "valid_indices_sha256": hashlib.sha256(
             np.asarray(valid_indices, dtype=np.int64).tobytes()
         ).hexdigest(),
-        "independent_test_accessed": False,
+        "independent_test_accessed": args.split == "test",
     }
     write_json(validation_report, report)
     print(json.dumps(report, indent=2, sort_keys=True))
-    print("Released independent test set was not accessed.")
+    if args.split == "test":
+        print("Released independent-test site context was accessed.")
+    else:
+        print("Released independent test set was not accessed.")
 
 
 if __name__ == "__main__":
