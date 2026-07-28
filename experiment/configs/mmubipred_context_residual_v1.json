@@ -9,6 +9,12 @@
   "minimum_validated_fraction": 0.95,
   "num_workers": 0,
   "stacker_l2_strength": 0.01,
+  "local_stabilization": {
+    "initialization_seeds": [42, 123, 2026],
+    "selection_metric": "inner_validation_fixed_threshold_mcc",
+    "reject_single_class_inner_predictions": true,
+    "tie_breakers": ["inner_validation_auprc", "ascending_seed"]
+  },
   "local_expert": {
     "inner_validation_fraction": 0.1,
     "batch_size": 32,

@@ -86,3 +86,35 @@ There are ten expert-fold jobs: five local and five context. Notebook 09 can
 run one outer fold per Colab session. State is saved after every epoch, and
 completed outer predictions are reused with `--resume`. The OOF summary is
 generated automatically after all jobs exist.
+
+## Recorded protocol amendment: local-expert stabilization
+
+The original five-fold run completed with strong context-expert performance
+but local fold 4 predicted every outer sample as positive (`MCC=0`,
+`sensitivity=1`, `specificity=0`). Consequently, the original automatic `GO`
+was invalid: its reference OOF vector contained a collapsed fold. No context
+model or context prediction is changed by this amendment.
+
+Before any final refit or historical-test use, all five inexpensive local
+folds are repeated under one uniform multi-initialization rule:
+
+1. keep the original outer and inner protein-grouped partitions fixed;
+2. train local candidates with initialization seeds `42`, `123`, and `2026`;
+3. reject candidates producing one-class inner-validation predictions;
+4. select maximum inner fixed-threshold MCC, breaking ties by AUPRC and then
+   ascending seed; and
+5. evaluate only the selected candidate on the outer fold.
+
+The outer fold is never used for initialization selection. Applying the same
+rule to every fold avoids a fold-4-only retry. The corrected summary reads the
+unchanged context predictions, uses the stabilized local OOF vector, and
+automatically returns `INVALID_COLLAPSED_EXPERT` if either expert still has a
+one-class outer fold.
+
+The amendment also prevents a weak fusion from advancing merely because it
+beats the local baseline. Residual fusion is selected only if its fixed MCC
+exceeds context-only MCC by at least `0.005`, with the same accuracy and
+ranking-metric safeguards. Otherwise, context alone advances if it improves
+fixed MCC over the stabilized local expert by at least `0.01` while satisfying
+those safeguards. These outcomes are reported as `ADVANCE_RESIDUAL_STACK`,
+`ADVANCE_CONTEXT_ONLY`, `STOP`, or `INVALID_COLLAPSED_EXPERT`.

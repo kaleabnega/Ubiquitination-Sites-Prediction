@@ -33,7 +33,7 @@ MMUbiPred.
 | Backbone screen | CenterLoRA-ProtBERT v1 | MCC `0.58275`, seed 42 | Passed development screen |
 | Historical-test evaluation | CenterLoRA-ProtBERT v1 | MCC `0.54997`, seed 42 | Numerical gain of `0.00413`; inconclusive |
 | Candidate 5 | LoRA-ESM2 Hybrid v1 | Development MCC `0.57165`; historical-test MCC `0.53616` | Rejected |
-| Current architecture | MMUbiPred–Context Residual v1 | Five-fold OOF protocol | Ready to run |
+| Current architecture | MMUbiPred–Context Residual v1 | Context OOF MCC `0.57901` | Local stabilization required |
 
 Architecture-screen results above use protein-grouped development splits drawn
 only from the released training set. The separately labelled historical-test

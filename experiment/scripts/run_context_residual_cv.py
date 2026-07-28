@@ -231,10 +231,19 @@ def finish_oof_summary(
     records: list,
     fold_assignments: np.ndarray,
     l2_strength: float,
+    local_directory_name: str = "local",
+    summary_filename: str = "summary.json",
+    predictions_filename: str = "oof_predictions.npz",
 ) -> dict[str, object]:
     sample_count = len(records)
     labels = np.asarray([record.label for record in records], dtype=np.int64)
     expert_probabilities: dict[str, np.ndarray] = {}
+    per_fold_metrics: list[dict[str, object]] = []
+    collapsed_expert_folds: list[dict[str, object]] = []
+    expert_directories = {
+        "local": local_directory_name,
+        "context": "context",
+    }
     for expert_name in ("local", "context"):
         probabilities = np.full(sample_count, np.nan, dtype=np.float64)
         for fold in sorted(set(fold_assignments.tolist())):
@@ -242,7 +251,7 @@ def finish_oof_summary(
                 output_dir
                 / "folds"
                 / f"fold_{fold}"
-                / expert_name
+                / expert_directories[expert_name]
                 / "outer_predictions.npz"
             )
             indices = saved["dataset_indices"].astype(np.int64)
@@ -259,7 +268,31 @@ def finish_oof_summary(
                 )
             if np.any(~np.isnan(probabilities[indices])):
                 raise RuntimeError(f"Duplicate OOF predictions for {expert_name}")
-            probabilities[indices] = saved["probabilities"]
+            fold_probabilities = saved["probabilities"]
+            probabilities[indices] = fold_probabilities
+            fixed = compute_metrics(labels[indices], fold_probabilities, 0.5)
+            collapsed = (
+                (
+                    float(fixed["sensitivity"]) == 1.0
+                    and float(fixed["specificity"]) == 0.0
+                )
+                or (
+                    float(fixed["sensitivity"]) == 0.0
+                    and float(fixed["specificity"]) == 1.0
+                )
+            )
+            per_fold_metrics.append(
+                {
+                    "fold": int(fold),
+                    "expert": expert_name,
+                    "collapsed": collapsed,
+                    "fixed_threshold": fixed,
+                }
+            )
+            if collapsed:
+                collapsed_expert_folds.append(
+                    {"fold": int(fold), "expert": expert_name}
+                )
         if np.isnan(probabilities).any():
             raise RuntimeError(f"Incomplete OOF predictions for {expert_name}")
         expert_probabilities[expert_name] = probabilities
@@ -305,6 +338,7 @@ def finish_oof_summary(
             ),
         }
     local_fixed = metrics["local_expert"]["fixed_threshold"]
+    context_fixed = metrics["context_expert"]["fixed_threshold"]
     stack_fixed = metrics["residual_stack_crossfit"]["fixed_threshold"]
     deltas = {
         metric: float(stack_fixed[metric]) - float(local_fixed[metric])
@@ -316,8 +350,54 @@ def finish_oof_summary(
         "auroc_drop_at_most_0.002": deltas["auroc"] >= -0.002,
         "auprc_drop_at_most_0.002": deltas["auprc"] >= -0.002,
     }
+    context_minus_local = {
+        metric: float(context_fixed[metric]) - float(local_fixed[metric])
+        for metric in ("mcc", "accuracy", "auroc", "auprc")
+    }
+    stack_minus_context = {
+        metric: float(stack_fixed[metric]) - float(context_fixed[metric])
+        for metric in ("mcc", "accuracy", "auroc", "auprc")
+    }
+    context_advancement_checks = {
+        "context_mcc_gain_over_local_at_least_0.01": (
+            context_minus_local["mcc"] >= 0.01
+        ),
+        "context_accuracy_drop_vs_local_at_most_0.005": (
+            context_minus_local["accuracy"] >= -0.005
+        ),
+        "context_auroc_drop_vs_local_at_most_0.002": (
+            context_minus_local["auroc"] >= -0.002
+        ),
+        "context_auprc_drop_vs_local_at_most_0.002": (
+            context_minus_local["auprc"] >= -0.002
+        ),
+    }
+    fusion_advancement_checks = {
+        "stack_mcc_gain_over_context_at_least_0.005": (
+            stack_minus_context["mcc"] >= 0.005
+        ),
+        "stack_accuracy_drop_vs_context_at_most_0.005": (
+            stack_minus_context["accuracy"] >= -0.005
+        ),
+        "stack_auroc_drop_vs_context_at_most_0.002": (
+            stack_minus_context["auroc"] >= -0.002
+        ),
+        "stack_auprc_drop_vs_context_at_most_0.002": (
+            stack_minus_context["auprc"] >= -0.002
+        ),
+    }
+    if collapsed_expert_folds:
+        amended_candidate_decision = "INVALID_COLLAPSED_EXPERT"
+    elif all(decision_checks.values()) and all(
+        fusion_advancement_checks.values()
+    ):
+        amended_candidate_decision = "ADVANCE_RESIDUAL_STACK"
+    elif all(context_advancement_checks.values()):
+        amended_candidate_decision = "ADVANCE_CONTEXT_ONLY"
+    else:
+        amended_candidate_decision = "STOP"
     np.savez_compressed(
-        output_dir / "oof_predictions.npz",
+        output_dir / predictions_filename,
         labels=labels,
         fold_assignments=fold_assignments,
         local_probabilities=expert_probabilities["local"],
@@ -332,18 +412,26 @@ def finish_oof_summary(
         ),
         "primary_reporting_threshold": 0.5,
         "metrics": metrics,
+        "per_fold_metrics": per_fold_metrics,
+        "collapsed_expert_folds": collapsed_expert_folds,
+        "comparison_valid": not collapsed_expert_folds,
         "stack_minus_local_fixed_threshold": deltas,
+        "context_minus_local_fixed_threshold": context_minus_local,
+        "stack_minus_context_fixed_threshold": stack_minus_context,
         "predeclared_decision_checks": decision_checks,
         "predeclared_decision": (
-            "GO"
-            if all(decision_checks.values())
-            else "STOP"
+            "INVALID_COLLAPSED_EXPERT"
+            if collapsed_expert_folds
+            else ("GO" if all(decision_checks.values()) else "STOP")
         ),
+        "amended_context_advancement_checks": context_advancement_checks,
+        "amended_fusion_advancement_checks": fusion_advancement_checks,
+        "amended_candidate_decision": amended_candidate_decision,
         "crossfit_stackers": crossfit_stackers,
         "final_stacker_for_future_refit": final_stacker.as_dict(),
         "independent_test_accessed": False,
     }
-    write_json(output_dir / "summary.json", summary)
+    write_json(output_dir / summary_filename, summary)
     return summary
 
 

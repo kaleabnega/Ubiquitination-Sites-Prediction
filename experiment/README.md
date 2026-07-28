@@ -188,6 +188,13 @@ the released independent test is absent from this workflow.
 See the frozen
 [`method and decision contract`](methods/mmubipred_context_residual_v1.md).
 
+The initial five-fold run produced context-expert OOF MCC `0.57901`, but local
+fold 4 predicted one class and invalidated the automatic residual-stack `GO`.
+Notebook 09 now contains a recorded local-only stabilization amendment:
+three predetermined initializations are selected using inner validation for
+every fold, while all expensive ESM-2 predictions are preserved. Any remaining
+single-class outer fold invalidates the corrected comparison automatically.
+
 ## Layout
 
 ```text
