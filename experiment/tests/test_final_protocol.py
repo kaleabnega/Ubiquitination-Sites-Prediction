@@ -41,6 +41,18 @@ evaluate_context = importlib.util.module_from_spec(CONTEXT_SPEC)
 sys.modules[CONTEXT_SPEC.name] = evaluate_context
 CONTEXT_SPEC.loader.exec_module(evaluate_context)
 
+MATCHED_SCRIPT_PATH = (
+    PROJECT_ROOT / "experiment" / "scripts" / "evaluate_matched_mmubipred.py"
+)
+MATCHED_SPEC = importlib.util.spec_from_file_location(
+    "evaluate_matched_mmubipred", MATCHED_SCRIPT_PATH
+)
+if MATCHED_SPEC is None or MATCHED_SPEC.loader is None:
+    raise RuntimeError(f"Could not import {MATCHED_SCRIPT_PATH}")
+evaluate_matched = importlib.util.module_from_spec(MATCHED_SPEC)
+sys.modules[MATCHED_SPEC.name] = evaluate_matched
+MATCHED_SPEC.loader.exec_module(evaluate_matched)
+
 
 class TinyModel(nn.Module):
     def __init__(self) -> None:
@@ -131,6 +143,15 @@ class FinalProtocolTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(FileExistsError, "Refusing to repeat"):
                 evaluate_context.ensure_outputs_absent(run_dir)
+
+    def test_released_full_metrics_must_reproduce_exactly(self) -> None:
+        evaluate_matched.verify_full_replication(
+            dict(evaluate_matched.EXPECTED_FULL_METRICS)
+        )
+        incorrect = dict(evaluate_matched.EXPECTED_FULL_METRICS)
+        incorrect["mcc"] = 0.0
+        with self.assertRaisesRegex(RuntimeError, "did not reproduce"):
+            evaluate_matched.verify_full_replication(incorrect)
 
     def test_development_trainable_checkpoint_loads(self) -> None:
         source = TinyModel()
