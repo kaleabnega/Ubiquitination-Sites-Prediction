@@ -190,10 +190,18 @@ See the frozen
 
 The initial five-fold run produced context-expert OOF MCC `0.57901`, but local
 fold 4 predicted one class and invalidated the automatic residual-stack `GO`.
-Notebook 09 now contains a recorded local-only stabilization amendment:
-three predetermined initializations are selected using inner validation for
-every fold, while all expensive ESM-2 predictions are preserved. Any remaining
-single-class outer fold invalidates the corrected comparison automatically.
+The recorded uniform local-only stabilization amendment removed all collapsed
+folds. The corrected local OOF MCC was `0.55626`; context retained MCC
+`0.57901`, a gain of `0.02274`, while also improving accuracy, AUROC, and
+AUPRC. The residual stack improved over context by only `0.00271` MCC, below
+the `0.005` fusion safeguard, so the corrected decision is
+`ADVANCE_CONTEXT_ONLY`.
+
+The five context-fold best epochs `[8, 8, 7, 6, 7]` freeze the final duration
+at their integer median, seven epochs. Notebook 09 now includes a resumable
+full-data refit of a fresh context-only model on the 89,551 released training
+sites that passed exact context validation. It uses no validation or test
+loader.
 
 ## Layout
 

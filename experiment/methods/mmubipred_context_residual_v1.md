@@ -118,3 +118,27 @@ ranking-metric safeguards. Otherwise, context alone advances if it improves
 fixed MCC over the stabilized local expert by at least `0.01` while satisfying
 those safeguards. These outcomes are reported as `ADVANCE_RESIDUAL_STACK`,
 `ADVANCE_CONTEXT_ONLY`, `STOP`, or `INVALID_COLLAPSED_EXPERT`.
+
+## Frozen corrected result and final refit
+
+The uniform stabilization completed without collapsed outer folds. At the
+fixed `0.5` threshold, the corrected local expert obtained OOF MCC `0.55626`,
+accuracy `0.75375`, AUROC `0.85650`, and AUPRC `0.88590`. The unchanged
+context expert obtained MCC `0.57901`, accuracy `0.78695`, AUROC `0.88123`,
+and AUPRC `0.90243`. The residual stack reached MCC `0.58172`, only `0.00271`
+above context, so it did not meet the `0.005` minimum fusion gain. The frozen
+decision is therefore `ADVANCE_CONTEXT_ONLY`.
+
+The context inner-validation best epochs across folds 0–4 were
+`[8, 8, 7, 6, 7]`. The final refit epoch count is their integer median:
+seven. A fresh context-only model is refitted with the unchanged optimizer,
+learning rates, LoRA configuration, 257-residue input, and seed 42 on all
+89,551 released training records that passed the frozen sequence validation.
+No validation set, threshold search, early stopping, fusion fitting, or test
+loader is used in this refit. The primary future reporting threshold remains
+`0.5`.
+
+The refit writes an exact epoch-boundary resume checkpoint after every epoch.
+Its final compact checkpoint stores the trainable LoRA and task-head
+parameters plus immutable model, cache, decision-summary, and eligible-record
+hashes. Re-running with `--resume` continues from the next unfinished epoch.

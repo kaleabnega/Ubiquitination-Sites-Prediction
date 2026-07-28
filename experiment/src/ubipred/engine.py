@@ -390,6 +390,8 @@ def refit_model(
     use_amp: bool,
     validation_selected_threshold: float,
     checkpoint_metadata: dict[str, object],
+    resume: bool = False,
+    compact_checkpoint: bool = False,
 ) -> dict[str, object]:
     """Refit a fresh model on every released training sample.
 
@@ -404,6 +406,11 @@ def refit_model(
         raise ValueError("gradient_clip_norm must be positive or None")
     if gradient_accumulation_steps <= 0:
         raise ValueError("gradient_accumulation_steps must be positive")
+    if resume and bool(getattr(train_loader, "persistent_workers", False)):
+        raise ValueError(
+            "Exact epoch-boundary resume requires num_workers=0 so DataLoader "
+            "generator consumption is reproducible"
+        )
 
     run_dir = Path(output_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -419,8 +426,41 @@ def refit_model(
     amp_enabled = bool(use_amp and device.type == "cuda")
     scaler = torch.amp.GradScaler(device.type, enabled=amp_enabled)
     history: list[dict[str, object]] = []
+    start_epoch = 1
+    resume_path = run_dir / "refit_resume.pt"
 
-    for epoch in range(1, epochs + 1):
+    if resume and resume_path.exists():
+        resume_checkpoint = torch.load(
+            resume_path, map_location="cpu", weights_only=False
+        )
+        if resume_checkpoint["metadata"] != checkpoint_metadata:
+            raise ValueError(
+                "Resume checkpoint metadata does not match this code/configuration"
+            )
+        _load_trainable_state(model, resume_checkpoint["model_state_dict"])
+        optimizer.load_state_dict(resume_checkpoint["optimizer_state_dict"])
+        scaler.load_state_dict(resume_checkpoint["scaler_state_dict"])
+        history = list(resume_checkpoint["history"])
+        start_epoch = int(resume_checkpoint["completed_epoch"]) + 1
+        random.setstate(resume_checkpoint["python_rng_state"])
+        np.random.set_state(resume_checkpoint["numpy_rng_state"])
+        torch.set_rng_state(resume_checkpoint["torch_rng_state"])
+        if torch.cuda.is_available() and resume_checkpoint["cuda_rng_states"]:
+            torch.cuda.set_rng_state_all(resume_checkpoint["cuda_rng_states"])
+        loader_generator = getattr(train_loader, "generator", None)
+        if (
+            loader_generator is not None
+            and resume_checkpoint["loader_generator_state"] is not None
+        ):
+            loader_generator.set_state(
+                resume_checkpoint["loader_generator_state"]
+            )
+        print(
+            f"refit_resumed_after_epoch={start_epoch - 1:03d}",
+            flush=True,
+        )
+
+    for epoch in range(start_epoch, epochs + 1):
         started = time.time()
         print(f"refit_epoch={epoch:03d}/{epochs:03d} started", flush=True)
         model.train()
@@ -472,11 +512,42 @@ def refit_model(
             f"loss={epoch_record['train_loss']:.5f}"
         )
 
-    checkpoint = {
-        "model_state_dict": {
+        loader_generator = getattr(train_loader, "generator", None)
+        resume_checkpoint = {
+            "completed_epoch": epoch,
+            "model_state_dict": _trainable_state_dict(model),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scaler_state_dict": scaler.state_dict(),
+            "history": history,
+            "metadata": checkpoint_metadata,
+            "python_rng_state": random.getstate(),
+            "numpy_rng_state": np.random.get_state(),
+            "torch_rng_state": torch.get_rng_state(),
+            "cuda_rng_states": (
+                torch.cuda.get_rng_state_all() if torch.cuda.is_available() else []
+            ),
+            "loader_generator_state": (
+                loader_generator.get_state()
+                if loader_generator is not None
+                else None
+            ),
+        }
+        torch.save(resume_checkpoint, resume_path)
+
+    state_dict_scope = (
+        "trainable_parameters" if compact_checkpoint else "full_model"
+    )
+    model_state_dict = (
+        _trainable_state_dict(model)
+        if compact_checkpoint
+        else {
             name: value.detach().cpu().clone()
             for name, value in model.state_dict().items()
-        },
+        }
+    )
+    checkpoint = {
+        "model_state_dict": model_state_dict,
+        "state_dict_scope": state_dict_scope,
         "best_epoch": epochs,
         "refit_epochs": epochs,
         "validation_selected_threshold": float(validation_selected_threshold),
@@ -487,6 +558,8 @@ def refit_model(
         "epochs": epochs,
         "samples": len(train_loader.dataset),
         "checkpoint": "best.pt",
+        "state_dict_scope": state_dict_scope,
+        "resumed": bool(resume and start_epoch > 1),
     }
     write_json(run_dir / "refit_summary.json", summary)
     return summary

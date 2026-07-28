@@ -15,6 +15,14 @@
     "reject_single_class_inner_predictions": true,
     "tie_breakers": ["inner_validation_auprc", "ascending_seed"]
   },
+  "final_context_refit": {
+    "experiment_name": "mmubipred_context_only_final_v1",
+    "output_dir": "/content/drive/MyDrive/MMUbiPred-research/experiments/mmubipred-context-only-final-v1-seed42",
+    "seed": 42,
+    "epochs": 7,
+    "epoch_selection_rule": "integer median of the five context-fold inner-validation best epochs",
+    "source_best_epochs": [8, 8, 7, 6, 7]
+  },
   "local_expert": {
     "inner_validation_fraction": 0.1,
     "batch_size": 32,

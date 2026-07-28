@@ -33,7 +33,7 @@ MMUbiPred.
 | Backbone screen | CenterLoRA-ProtBERT v1 | MCC `0.58275`, seed 42 | Passed development screen |
 | Historical-test evaluation | CenterLoRA-ProtBERT v1 | MCC `0.54997`, seed 42 | Numerical gain of `0.00413`; inconclusive |
 | Candidate 5 | LoRA-ESM2 Hybrid v1 | Development MCC `0.57165`; historical-test MCC `0.53616` | Rejected |
-| Current architecture | MMUbiPred–Context Residual v1 | Context OOF MCC `0.57901` | Local stabilization required |
+| Current architecture | Long-context LoRA-ESM2 candidate | OOF MCC `0.57901` | Advanced to frozen 7-epoch full-data refit |
 
 Architecture-screen results above use protein-grouped development splits drawn
 only from the released training set. The separately labelled historical-test
@@ -124,12 +124,21 @@ decreased. This is a numerical MCC win, not compelling evidence of a generally
 better model, especially because it is one seed fitted on only 82,535 of the
 91,723 released training records.
 
-The current experiment preserves the complete paper-compatible MMUbiPred
-topology as a local expert and adds a rank-8 LoRA ESM-2 expert over validated
-257-residue UniProt context. A nonnegative residual stack combines their
-logits. Five protein-grouped outer folds and a second stacker cross-fit provide
-a stronger development estimate than another seed-42 screen. The released
-test is not loaded.
+The current experiment compared the complete paper-compatible MMUbiPred
+topology with a rank-8 LoRA ESM-2 expert over validated 257-residue UniProt
+context. After the uniform local-expert stabilization amendment, the context
+expert reached fixed-threshold OOF MCC `0.57901`, versus `0.55626` for the
+fold-matched local expert. It also improved accuracy from `0.75375` to
+`0.78695`, AUROC from `0.85650` to `0.88123`, and AUPRC from `0.88590` to
+`0.90243`. The residual stack added only `0.00271` MCC over context alone,
+below the frozen `0.005` fusion requirement, so the simpler context-only
+candidate advanced.
+
+The five inner-validation best epochs were `[8, 8, 7, 6, 7]`. Their frozen
+integer median fixes the final training duration at seven epochs.
+The next run refits a fresh context-only model on all 89,551 released training
+sites that passed exact UniProt-context validation. It performs no validation
+or test evaluation and can resume exactly after each completed epoch.
 
 Read the complete
 [CenterLoRA-ESM2 v1 method specification](experiment/methods/center_lora_esm2_v1.md)
@@ -182,7 +191,9 @@ The notebook:
 7. runs or resumes one or more of five outer folds;
 8. creates fold-safe OOF predictions for both experts; and
 9. evaluates the residual stack through a second cross-fit without loading the
-   released test.
+   released test; and
+10. runs the frozen seven-epoch context-only full-data refit after the corrected
+    decision is `ADVANCE_CONTEXT_ONLY`.
 
 For this private repository, create a fine-grained GitHub token with read-only
 access, save it in Colab Secrets as `GITHUB_TOKEN`, and enable notebook access
