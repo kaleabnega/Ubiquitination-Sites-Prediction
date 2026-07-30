@@ -31,6 +31,16 @@
     "historical_test_informed": true,
     "only_changed_factor": "training duration"
   },
+  "exploratory_residual_refit": {
+    "experiment_name": "mmubipred_context_residual_full_refit_exploratory_v1",
+    "output_dir": "/content/drive/MyDrive/MMUbiPred-research/experiments/mmubipred-context-residual-full-refit-exploratory-v1",
+    "context_run_dir": "/content/drive/MyDrive/MMUbiPred-research/experiments/mmubipred-context-only-final-v1-seed42",
+    "local_seed_selection_rule": "most frequently selected non-collapsed initialization across the five stabilized folds; ties use the smaller seed",
+    "local_epoch_selection_rule": "integer median of the five selected stabilized-local inner-validation best epochs",
+    "fusion_rule": "frozen final nonnegative logit stacker fitted to all corrected out-of-fold predictions",
+    "historical_test_informed": true,
+    "reporting_threshold": 0.5
+  },
   "local_expert": {
     "inner_validation_fraction": 0.1,
     "batch_size": 32,

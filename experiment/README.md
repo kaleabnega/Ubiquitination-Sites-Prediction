@@ -212,6 +212,14 @@ ablation. It preserves the epoch-7 run and restores its exact training state
 in a new directory before continuing epochs 8–15. Its outputs are permanently
 marked test-informed and cannot replace the frozen primary result.
 
+The notebook additionally supports a post-test exploratory refit of the
+previously specified residual hybrid. It reuses the frozen seven-epoch context
+checkpoint and frozen OOF-fitted stacker, derives the local expert's seed and
+epoch count only from the five stabilized development folds, and refits that
+local expert on the same 89,551 validated training records. Evaluation uses
+the identical 12,288-record matched test cohort and fixed threshold `0.5`;
+neither fusion weights nor threshold may be tuned on the historical test.
+
 ## Layout
 
 ```text

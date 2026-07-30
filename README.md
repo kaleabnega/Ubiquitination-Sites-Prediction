@@ -148,6 +148,10 @@ The hybrid protocol is specified in
 [LoRA-ESM2 Hybrid v1](experiment/methods/lora_esm2_hybrid_v1.md).
 The current protocol is specified in
 [MMUbiPred–Context Residual v1](experiment/methods/mmubipred_context_residual_v1.md).
+Notebook 09 also contains guarded post-test exploratory workflows for the
+epoch-15 duration ablation and for a full-data refit of the previously
+specified residual hybrid. These runs preserve the frozen primary result and
+are explicitly excluded from confirmatory claims.
 
 ## Repository layout
 

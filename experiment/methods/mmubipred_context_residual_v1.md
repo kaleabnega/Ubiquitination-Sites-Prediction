@@ -166,3 +166,29 @@ Because training duration was reconsidered after observing the historical
 test, the epoch-15 result cannot replace the epoch-7 primary result or support
 a confirmatory superiority claim. It is recorded as test-informed exploratory
 evidence and would require confirmation on a new external test set.
+
+## Post-test exploratory residual-hybrid refit
+
+The residual stack originally failed the predeclared advancement margin by
+improving fixed-threshold OOF MCC only from `0.57901` to `0.58172`. After the
+context-only historical-test results were inspected, a separate exploratory
+pipeline was added to measure—not reselect—this previously specified hybrid.
+The frozen seven-epoch context checkpoint and the final stacker fitted to all
+corrected OOF predictions are reused without modification.
+
+Only the MMUbiPred-compatible local expert is refitted. Its initialization is
+the most frequently selected non-collapsed seed across the five stabilized
+folds, with an ascending-seed tie-break. Its duration is the integer median of
+the corresponding five inner-validation best epochs. It trains on the same
+89,551 context-validated released training records as the context refit and
+never reads validation or test data.
+
+Historical-test evaluation uses the exact 12,288-record context-valid cohort,
+the already saved frozen context probabilities, and threshold `0.5`. The
+stacker intercept and nonnegative local/context weights cannot be refitted,
+threshold-tuned, or selected on the test. Results are compared side by side
+with the released MMUbiPred checkpoint, the newly refitted local expert, and
+the frozen context expert. Because the decision to revisit a candidate that
+failed its original advancement margin occurred after historical-test
+inspection, every output is permanently marked post-test exploratory and
+cannot support a confirmatory superiority claim.

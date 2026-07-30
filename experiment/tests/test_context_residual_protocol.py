@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "experiment" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "experiment" / "scripts"))
 
 from run_context_residual_cv import finish_oof_summary  # noqa: E402
+from refit_context_residual_hybrid import derive_local_refit_plan  # noqa: E402
 from stabilize_context_residual_local import (  # noqa: E402
     candidate_sort_key,
     is_collapsed,
@@ -54,6 +56,58 @@ class ContextResidualProtocolTests(unittest.TestCase):
         ]
         selected = sorted(candidates, key=candidate_sort_key)[0]
         self.assertEqual(selected["initialization_seed"], 42)
+
+    def test_hybrid_local_refit_plan_uses_mode_seed_and_median_epoch(
+        self,
+    ) -> None:
+        selected_seeds = [42, 123, 42, 2026, 42]
+        best_epochs = [8, 4, 6, 10, 7]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for fold, (seed, best_epoch) in enumerate(
+                zip(selected_seeds, best_epochs)
+            ):
+                target = (
+                    root
+                    / "folds"
+                    / f"fold_{fold}"
+                    / "local_stabilized"
+                )
+                target.mkdir(parents=True)
+                candidates = [
+                    {
+                        "initialization_seed": candidate_seed,
+                        "inner_collapsed": candidate_seed != seed,
+                        "development_selection": {
+                            "best_epoch": (
+                                best_epoch
+                                if candidate_seed == seed
+                                else best_epoch + 1
+                            )
+                        },
+                    }
+                    for candidate_seed in (42, 123, 2026)
+                ]
+                (target / "selection.json").write_text(
+                    json.dumps(
+                        {
+                            "fold": fold,
+                            "selected_initialization_seed": seed,
+                            "outer_fold_accessed_for_selection": False,
+                            "candidates": candidates,
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            plan = derive_local_refit_plan(root, fold_count=5)
+
+        self.assertEqual(
+            plan["fold_selected_initialization_seeds"], selected_seeds
+        )
+        self.assertEqual(plan["fold_selected_best_epochs"], best_epochs)
+        self.assertEqual(plan["selected_seed"], 42)
+        self.assertEqual(plan["selected_epochs"], 7)
 
     def test_collapsed_outer_fold_invalidates_go(self) -> None:
         labels = np.asarray([0, 0, 1, 1, 0, 0, 1, 1], dtype=np.int64)
