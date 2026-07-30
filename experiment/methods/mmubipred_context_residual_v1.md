@@ -192,3 +192,28 @@ the frozen context expert. Because the decision to revisit a candidate that
 failed its original advancement margin occurred after historical-test
 inspection, every output is permanently marked post-test exploratory and
 cannot support a confirmatory superiority claim.
+
+## Post-test exploratory exact-MMUbiPred/context ensemble
+
+A separate parameter-free analysis combines the authors' exact released H5
+checkpoint predictions with the frozen seven-epoch context predictions. It
+does not substitute the PyTorch MMUbiPred-compatible expert and does not
+reuse the learned residual stacker. The primary rule is fixed before its
+result is viewed:
+
+```text
+p_ensemble = 0.5 * p_released_MMUbipred + 0.5 * p_context
+```
+
+The classification threshold remains `0.5`. No weights, calibration,
+threshold, or architecture parameters are fitted. The evaluator reuses the
+saved exact-model and context probabilities on the existing 12,288-record
+matched cohort, verifies the released-model and context-checkpoint hashes,
+and refuses epoch-15 context predictions. It reports aligned component and
+ensemble metrics plus paired correctness disagreements.
+
+This test directly measures whether the two frozen models contain
+complementary predictive information. It remains post-test exploratory
+because the ensemble was proposed after earlier historical-test inspection.
+Its matched-cohort results must not be compared directly with the paper's
+12,598-record full-test aggregate or described as independent confirmation.

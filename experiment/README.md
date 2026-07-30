@@ -220,6 +220,14 @@ local expert on the same 89,551 validated training records. Evaluation uses
 the identical 12,288-record matched test cohort and fixed threshold `0.5`;
 neither fusion weights nor threshold may be tuned on the historical test.
 
+Finally, a parameter-free exact-model ensemble reuses the authors' verified
+H5 probabilities and the frozen seven-epoch context probabilities on the
+same 12,288 records. Its primary rule is an equal `0.5/0.5` probability
+average at threshold `0.5`; it performs no training, calibration, TensorFlow
+inference, weight search, or threshold search. This analysis tests whether
+the exact released model and wider context make complementary errors while
+remaining explicitly post-test exploratory.
+
 ## Layout
 
 ```text

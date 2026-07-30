@@ -16,6 +16,7 @@ from ubipred.context import (  # noqa: E402
     build_validated_contexts,
     centered_sequence_window,
 )
+from ubipred.ensemble import equal_probability_average  # noqa: E402
 from ubipred.fasta import SiteRecord  # noqa: E402
 from ubipred.stacking import fit_residual_stacker  # noqa: E402
 
@@ -70,6 +71,18 @@ class ContextTests(unittest.TestCase):
         self.assertGreaterEqual(stacker.context_weight, 0.0)
         probabilities = stacker.predict_proba(local, context)
         self.assertTrue(np.all((probabilities > 0) & (probabilities < 1)))
+
+    def test_equal_probability_average_is_parameter_free_and_aligned(
+        self,
+    ) -> None:
+        paper = np.asarray([0.1, 0.7, 0.9])
+        context = np.asarray([0.3, 0.5, 0.7])
+        fused = equal_probability_average([paper, context])
+        np.testing.assert_allclose(fused, [0.2, 0.6, 0.8])
+        with self.assertRaises(ValueError):
+            equal_probability_average([paper, context[:2]])
+        with self.assertRaises(ValueError):
+            equal_probability_average([paper, np.asarray([0.2, 1.1, 0.4])])
 
 
 if __name__ == "__main__":

@@ -41,6 +41,18 @@
     "historical_test_informed": true,
     "reporting_threshold": 0.5
   },
+  "exploratory_exact_paper_context_ensemble": {
+    "experiment_name": "exact_mmubipred_context_equal_ensemble_exploratory_v1",
+    "output_dir": "/content/drive/MyDrive/MMUbiPred-research/experiments/exact-mmubipred-context-equal-ensemble-exploratory-v1",
+    "context_run_dir": "/content/drive/MyDrive/MMUbiPred-research/experiments/mmubipred-context-only-final-v1-seed42",
+    "fusion": "equal_probability_average",
+    "paper_weight": 0.5,
+    "context_weight": 0.5,
+    "reporting_threshold": 0.5,
+    "cohort": "exact saved context-valid matched test indices",
+    "historical_test_informed": true,
+    "trained_fusion_parameters": false
+  },
   "local_expert": {
     "inner_validation_fraction": 0.1,
     "batch_size": 32,

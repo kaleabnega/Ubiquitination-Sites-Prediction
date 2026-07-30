@@ -152,6 +152,9 @@ Notebook 09 also contains guarded post-test exploratory workflows for the
 epoch-15 duration ablation and for a full-data refit of the previously
 specified residual hybrid. These runs preserve the frozen primary result and
 are explicitly excluded from confirmatory claims.
+The same notebook also provides a fixed equal-probability ensemble of the
+authors' exact saved MMUbiPred predictions and the frozen seven-epoch context
+predictions on their identical matched cohort.
 
 ## Repository layout
 
