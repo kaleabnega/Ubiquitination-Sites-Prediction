@@ -221,9 +221,13 @@ def main() -> None:
     context_metrics_result = json.loads(
         context_metrics_path.read_text(encoding="utf-8")
     )
+    # Metrics produced before the epoch-15 exploration was added do not have
+    # this flag. Missing therefore means the legacy frozen run, not an
+    # exploratory run. The checkpoint hash, experiment identity, and exact
+    # seven-epoch duration are verified immediately below.
     if bool(
         context_metrics_result.get(
-            "historical_test_informed_exploration", True
+            "historical_test_informed_exploration", False
         )
     ):
         raise ValueError(
