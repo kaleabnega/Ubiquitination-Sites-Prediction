@@ -34,6 +34,7 @@ MMUbiPred.
 | Historical-test evaluation | CenterLoRA-ProtBERT v1 | MCC `0.54997`, seed 42 | Numerical gain of `0.00413`; inconclusive |
 | Candidate 5 | LoRA-ESM2 Hybrid v1 | Development MCC `0.57165`; historical-test MCC `0.53616` | Rejected |
 | Current architecture | Long-context LoRA-ESM2 candidate | OOF MCC `0.57901` | Advanced to frozen 7-epoch full-data refit |
+| External validation | dbPTM/PTMGPT2 benchmark | Cohort and inference protocol frozen | Awaiting leakage-audited cohort construction |
 
 Architecture-screen results above use protein-grouped development splits drawn
 only from the released training set. The separately labelled historical-test
@@ -156,6 +157,27 @@ The same notebook also provides a fixed equal-probability ensemble of the
 authors' exact saved MMUbiPred predictions and the frozen seven-epoch context
 predictions on their identical matched cohort.
 
+## External dbPTM/PTMGPT2 validation
+
+The next evaluation uses the released 2,077-site dbPTM/PTMGPT2 benchmark.
+Before inference, every published 21-mer must map exactly to its stated
+UniProt position. The pipeline removes PLMD training and historical-test
+proteins, exact released sites and windows, and proteins matched to PLMD
+training proteins by CD-HIT-2D at 30% identity with 80% shorter-sequence
+coverage.
+
+The candidate was frozen before this external evaluation: it is the
+equal-weight probability average of the authors' exact H5 model and the
+seven-epoch context model, evaluated at threshold `0.5`. MCC is primary and
+10,000 paired stratified bootstrap replicates quantify candidate-minus-paper
+uncertainty. The notebook deliberately stops after writing the cohort lock;
+external inference requires a separate explicit acknowledgement.
+
+[Open the external dbPTM/PTMGPT2 validation notebook](experiment/notebooks/10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb)
+
+Read the frozen
+[external-validation contract](experiment/methods/external_dbptm_ptmgpt2_v1.md).
+
 ## Repository layout
 
 ```text
@@ -203,6 +225,10 @@ The notebook:
     decision is `ADVANCE_CONTEXT_ONLY`; and
 11. provides a guarded one-time historical-test evaluation that validates test
     context coverage before reporting the fixed-threshold result.
+
+The separate external-validation workflow is:
+
+[10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb](experiment/notebooks/10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb)
 
 For this private repository, create a fine-grained GitHub token with read-only
 access, save it in Colab Secrets as `GITHUB_TOKEN`, and enable notebook access

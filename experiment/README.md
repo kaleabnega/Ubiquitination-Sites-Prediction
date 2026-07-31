@@ -228,6 +228,27 @@ inference, weight search, or threshold search. This analysis tests whether
 the exact released model and wider context make complementary errors while
 remaining explicitly post-test exploratory.
 
+## External validation: dbPTM/PTMGPT2
+
+Notebook 10 constructs a new external cohort from the released 2,077-site
+dbPTM/PTMGPT2 benchmark. It validates every published 21-mer against the
+stated UniProt coordinate, reconstructs matched 49- and 257-residue inputs,
+removes PLMD accession/site/window overlap, and applies CD-HIT-2D against PLMD
+training proteins at the frozen 30% identity and 80% shorter-sequence coverage
+rule.
+
+The cohort builder writes a checksum-locked manifest before inference. The
+primary candidate is already fixed as the equal `0.5/0.5` probability average
+of the authors' exact H5 model and the frozen seven-epoch context model at
+threshold `0.5`. MCC is primary; paired stratified-bootstrap intervals and an
+exact McNemar accuracy test compare it with the exact paper model on identical
+sites.
+
+[Open external dbPTM/PTMGPT2 validation in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb)
+
+See the frozen
+[`external-validation contract`](methods/external_dbptm_ptmgpt2_v1.md).
+
 ## Layout
 
 ```text
