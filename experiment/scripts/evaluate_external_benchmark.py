@@ -74,7 +74,7 @@ def load_cohort(path: Path) -> list[dict[str, str]]:
     required = {
         "benchmark_index",
         "identifier",
-        "accession",
+        "canonical_accession",
         "position_one_based",
         "label",
         "window_49",
@@ -213,7 +213,7 @@ def main() -> None:
     site_records = [
         SiteRecord(
             header=row["identifier"],
-            protein_id=row["accession"],
+            protein_id=row["canonical_accession"],
             position=int(row["position_one_based"]) - 1,
             sequence=row["window_49"],
             label=int(row["label"]),

@@ -11,8 +11,9 @@ exclusion rules.
 ## Source and reconstruction
 
 The released `benchmark.csv` contains 2,077 labelled, lysine-centred 21-mers
-with UniProt accessions and one-based site positions. Full proteins are
-retrieved from UniProt. A record is eligible only when its published 21-mer
+with historical UniProt entry names and one-based site positions. Each entry
+name is resolved to a canonical UniProt accession and full protein. A record
+is eligible only when its published 21-mer
 matches the current UniProt sequence exactly at the published position. The
 same verified protein is then used to construct the paper model's 49-residue
 window and the context model's 257-residue window.

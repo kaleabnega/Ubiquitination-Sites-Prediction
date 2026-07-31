@@ -231,8 +231,9 @@ remaining explicitly post-test exploratory.
 ## External validation: dbPTM/PTMGPT2
 
 Notebook 10 constructs a new external cohort from the released 2,077-site
-dbPTM/PTMGPT2 benchmark. It validates every published 21-mer against the
-stated UniProt coordinate, reconstructs matched 49- and 257-residue inputs,
+dbPTM/PTMGPT2 benchmark. It resolves historical entry names to canonical
+UniProt accessions, validates every published 21-mer against the stated
+coordinate, reconstructs matched 49- and 257-residue inputs,
 removes PLMD accession/site/window overlap, and applies CD-HIT-2D against PLMD
 training proteins at the frozen 30% identity and 80% shorter-sequence coverage
 rule.

@@ -14,7 +14,8 @@ from .fasta import ALPHABET_SET, SiteRecord, center_crop
 
 
 BENCHMARK_ID_PATTERN = re.compile(
-    r"^(?P<accession>[^_]+)_(?P<species>[^_]+)_(?P<position>[1-9][0-9]*)$"
+    r"^(?P<identifier_prefix>[^_]+)_(?P<species>[^_]+)_"
+    r"(?P<position>[1-9][0-9]*)$"
 )
 
 
@@ -24,7 +25,8 @@ class ExternalSite:
 
     benchmark_index: int
     identifier: str
-    accession: str
+    source_protein_id: str
+    accession_hint: str
     species: str
     position: int
     window_21: str
@@ -36,6 +38,7 @@ class ValidatedExternalSite:
     """An external site whose supplied anchor matches the retrieved protein."""
 
     site: ExternalSite
+    canonical_accession: str
     window_49: str
     context_257: str
 
@@ -48,15 +51,13 @@ def sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
-def parse_external_identifier(identifier: str) -> tuple[str, str, int]:
+def parse_external_identifier(identifier: str) -> tuple[str, str, str, int]:
     match = BENCHMARK_ID_PATTERN.fullmatch(identifier.strip())
     if match is None:
         raise ValueError(f"Invalid external benchmark identifier: {identifier}")
-    return (
-        match.group("accession"),
-        match.group("species"),
-        int(match.group("position")),
-    )
+    prefix = match.group("identifier_prefix")
+    species = match.group("species")
+    return prefix, f"{prefix}_{species}", species, int(match.group("position"))
 
 
 def load_external_benchmark(path: str | Path) -> list[ExternalSite]:
@@ -73,7 +74,12 @@ def load_external_benchmark(path: str | Path) -> list[ExternalSite]:
             if identifier in identifiers:
                 raise ValueError(f"Duplicate benchmark identifier: {identifier}")
             identifiers.add(identifier)
-            accession, species, position = parse_external_identifier(identifier)
+            (
+                accession_hint,
+                source_protein_id,
+                species,
+                position,
+            ) = parse_external_identifier(identifier)
             window = row["Seq"].strip().upper()
             if len(window) != 21 or window[10] != "K":
                 raise ValueError(
@@ -86,7 +92,8 @@ def load_external_benchmark(path: str | Path) -> list[ExternalSite]:
                 ExternalSite(
                     benchmark_index=index,
                     identifier=identifier,
-                    accession=accession,
+                    source_protein_id=source_protein_id,
+                    accession_hint=accession_hint,
                     species=species,
                     position=position,
                     window_21=window,
@@ -101,12 +108,13 @@ def load_external_benchmark(path: str | Path) -> list[ExternalSite]:
 def validate_external_site(
     site: ExternalSite,
     protein_sequence: str | None,
+    canonical_accession: str | None,
     context_window_size: int = 257,
 ) -> tuple[ValidatedExternalSite | None, str]:
     """Validate the published one-based position and reconstruct both windows."""
 
-    if protein_sequence is None:
-        return None, "accession_not_retrieved"
+    if protein_sequence is None or canonical_accession is None:
+        return None, "protein_identifier_not_resolved"
     sequence = protein_sequence.strip().upper()
     try:
         observed_21 = centered_sequence_window(
@@ -130,7 +138,9 @@ def validate_external_site(
         residue not in set(CONTEXT_RESIDUES) | {"-"} for residue in context
     ):
         return None, "unsupported_context_residue"
-    return ValidatedExternalSite(site, window_49, context), "validated"
+    return ValidatedExternalSite(
+        site, canonical_accession, window_49, context
+    ), "validated"
 
 
 def build_released_leakage_sets(
@@ -167,12 +177,16 @@ def leakage_reasons(
 
     site = validated.site
     reasons: list[str] = []
-    if site.accession in leakage_sets["training_accessions"]:
+    canonical_accession = validated.canonical_accession
+    if canonical_accession in leakage_sets["training_accessions"]:
         reasons.append("training_accession_overlap")
-    if site.accession in leakage_sets["historical_test_accessions"]:
+    if canonical_accession in leakage_sets["historical_test_accessions"]:
         reasons.append("historical_test_accession_overlap")
     # Released PLMD headers are zero-based; external positions are one-based.
-    if (site.accession, site.position - 1) in leakage_sets["released_sites"]:
+    if (
+        canonical_accession,
+        site.position - 1,
+    ) in leakage_sets["released_sites"]:
         reasons.append("released_site_overlap")
     if site.window_21 in leakage_sets["released_21mers"]:
         reasons.append("released_21mer_overlap")

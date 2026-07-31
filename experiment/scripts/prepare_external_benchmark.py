@@ -124,6 +124,13 @@ def main() -> None:
     external_sequences, external_metadata = load_sequence_cache(
         external_cache_path
     )
+    external_canonical_accessions = external_metadata.get(
+        "canonical_accessions"
+    )
+    if not isinstance(external_canonical_accessions, dict):
+        raise ValueError(
+            "External sequence cache lacks canonical accession mappings"
+        )
     training_sequences, training_metadata = load_sequence_cache(
         training_cache_path
     )
@@ -144,7 +151,8 @@ def main() -> None:
     for site in benchmark:
         record, reason = validate_external_site(
             site,
-            external_sequences.get(site.accession),
+            external_sequences.get(site.source_protein_id),
+            external_canonical_accessions.get(site.source_protein_id),
             context_window_size=int(protocol["context_window_size"]),
         )
         validation_reasons[reason] += 1
@@ -156,11 +164,20 @@ def main() -> None:
         if not reasons:
             pre_homology.append(record)
 
-    candidate_accessions = {record.site.accession for record in pre_homology}
-    candidate_sequences = {
-        accession: external_sequences[accession]
-        for accession in candidate_accessions
+    candidate_accessions = {
+        record.canonical_accession for record in pre_homology
     }
+    candidate_sequences: dict[str, str] = {}
+    for record in pre_homology:
+        sequence = external_sequences[record.site.source_protein_id]
+        previous = candidate_sequences.setdefault(
+            record.canonical_accession, sequence
+        )
+        if previous != sequence:
+            raise ValueError(
+                "One canonical accession resolved to conflicting sequences: "
+                f"{record.canonical_accession}"
+            )
     reference_accessions = {
         record.protein_id for record in train_records
     }
@@ -228,7 +245,7 @@ def main() -> None:
     final_records = [
         record
         for record in pre_homology
-        if record.site.accession in retained_accessions
+        if record.canonical_accession in retained_accessions
     ]
     if not final_records:
         raise RuntimeError("Homology filtering removed the entire cohort")
@@ -249,7 +266,8 @@ def main() -> None:
     fieldnames = [
         "benchmark_index",
         "identifier",
-        "accession",
+        "source_protein_id",
+        "canonical_accession",
         "species",
         "position_one_based",
         "label",
@@ -267,7 +285,8 @@ def main() -> None:
                 {
                     "benchmark_index": site.benchmark_index,
                     "identifier": site.identifier,
-                    "accession": site.accession,
+                    "source_protein_id": site.source_protein_id,
+                    "canonical_accession": record.canonical_accession,
                     "species": site.species,
                     "position_one_based": site.position,
                     "label": site.label,
@@ -275,7 +294,9 @@ def main() -> None:
                     "window_49": record.window_49,
                     "context_257": record.context_257,
                     "protein_sequence_sha256": hashlib.sha256(
-                        external_sequences[site.accession].encode("ascii")
+                        external_sequences[site.source_protein_id].encode(
+                            "ascii"
+                        )
                     ).hexdigest(),
                 }
             )
@@ -379,7 +400,7 @@ def main() -> None:
             "sha256": sha256_file(final_path),
             "support": final_support,
             "unique_accessions": len(
-                {record.site.accession for record in final_records}
+                {record.canonical_accession for record in final_records}
             ),
             "benchmark_indices_sha256": hashlib.sha256(
                 ",".join(

@@ -160,8 +160,9 @@ predictions on their identical matched cohort.
 ## External dbPTM/PTMGPT2 validation
 
 The next evaluation uses the released 2,077-site dbPTM/PTMGPT2 benchmark.
-Before inference, every published 21-mer must map exactly to its stated
-UniProt position. The pipeline removes PLMD training and historical-test
+Before inference, every historical UniProt entry name is resolved to its
+canonical accession and every published 21-mer must map exactly to its stated
+position. The pipeline removes PLMD training and historical-test
 proteins, exact released sites and windows, and proteins matched to PLMD
 training proteins by CD-HIT-2D at 30% identity with 80% shorter-sequence
 coverage.

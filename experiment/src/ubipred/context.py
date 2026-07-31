@@ -98,7 +98,7 @@ def validate_and_build_context(
 
 def load_sequence_cache(path: str | Path) -> tuple[dict[str, str], dict[str, object]]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    if int(payload.get("schema_version", 0)) != 1:
+    if int(payload.get("schema_version", 0)) not in (1, 2):
         raise ValueError("Unsupported UniProt sequence-cache schema")
     sequences = payload.get("sequences")
     if not isinstance(sequences, dict):

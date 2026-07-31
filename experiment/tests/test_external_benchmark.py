@@ -30,7 +30,8 @@ class ExternalBenchmarkTests(unittest.TestCase):
         self.site = ExternalSite(
             benchmark_index=0,
             identifier="P12345_HUMAN_51",
-            accession="P12345",
+            source_protein_id="P12345_HUMAN",
+            accession_hint="P12345",
             species="HUMAN",
             position=51,
             window_21=self.window_21,
@@ -40,7 +41,11 @@ class ExternalBenchmarkTests(unittest.TestCase):
     def test_identifier_and_csv_contract(self) -> None:
         self.assertEqual(
             parse_external_identifier("P12345_HUMAN_51"),
-            ("P12345", "HUMAN", 51),
+            ("P12345", "P12345_HUMAN", "HUMAN", 51),
+        )
+        self.assertEqual(
+            parse_external_identifier("1433B_HUMAN_10"),
+            ("1433B", "1433B_HUMAN", "HUMAN", 10),
         )
         with self.assertRaises(ValueError):
             parse_external_identifier("P12345|51")
@@ -63,7 +68,7 @@ class ExternalBenchmarkTests(unittest.TestCase):
             sum(record.label == 1 for record in records), 753
         )
         self.assertEqual(
-            len({record.accession for record in records}), 1673
+            len({record.source_protein_id for record in records}), 1692
         )
         self.assertEqual(
             sha256_file(path),
@@ -71,7 +76,9 @@ class ExternalBenchmarkTests(unittest.TestCase):
         )
 
     def test_position_is_one_based_and_anchor_must_match(self) -> None:
-        validated, reason = validate_external_site(self.site, self.sequence)
+        validated, reason = validate_external_site(
+            self.site, self.sequence, "P12345"
+        )
         self.assertEqual(reason, "validated")
         self.assertIsNotNone(validated)
         assert validated is not None
@@ -81,7 +88,9 @@ class ExternalBenchmarkTests(unittest.TestCase):
         shifted = ExternalSite(
             **{**self.site.__dict__, "position": 50}
         )
-        invalid, reason = validate_external_site(shifted, self.sequence)
+        invalid, reason = validate_external_site(
+            shifted, self.sequence, "P12345"
+        )
         self.assertIsNone(invalid)
         self.assertEqual(reason, "uniprot_center_is_not_lysine")
 
@@ -95,7 +104,9 @@ class ExternalBenchmarkTests(unittest.TestCase):
             label=1,
             source="train.fasta",
         )
-        validated, _ = validate_external_site(self.site, self.sequence)
+        validated, _ = validate_external_site(
+            self.site, self.sequence, "P12345"
+        )
         assert validated is not None
         reasons = leakage_reasons(
             validated,
