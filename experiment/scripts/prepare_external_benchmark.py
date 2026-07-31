@@ -7,8 +7,10 @@ import argparse
 import csv
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,10 +25,11 @@ from ubipred.external_benchmark import (  # noqa: E402
     label_counts,
     leakage_reasons,
     load_external_benchmark,
+    parse_mmseqs_homology_hit,
     sha256_file,
     validate_external_site,
 )
-from ubipred.fasta import iter_fasta, load_released_split  # noqa: E402
+from ubipred.fasta import load_released_split  # noqa: E402
 
 
 EXPECTED_BENCHMARK_SHA256 = (
@@ -74,7 +77,7 @@ def main() -> None:
         "--data-dir", default="replication/MMUbiPred"
     )
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--cd-hit-2d", default="cd-hit-2d")
+    parser.add_argument("--mmseqs", default="mmseqs")
     args = parser.parse_args()
 
     config_path = resolve_project_path(args.config)
@@ -117,6 +120,7 @@ def main() -> None:
         or not bool(protocol["exclude_training_accessions"])
         or not bool(protocol["exclude_historical_test_accessions"])
         or not bool(protocol["exclude_exact_released_windows"])
+        or protocol["homology_tool"] != "MMseqs2"
     ):
         raise ValueError("Cohort protocol differs from the frozen contract")
 
@@ -203,45 +207,99 @@ def main() -> None:
     reference_fasta = output_dir / "plmd_training_proteins.fasta"
     candidate_fasta = output_dir / "pre_homology_external_proteins.fasta"
     nonhomologous_fasta = output_dir / "nonhomologous_external_proteins.fasta"
+    raw_alignments_path = output_dir / "mmseqs_alignments.tsv"
+    qualifying_alignments_path = (
+        output_dir / "qualifying_homology_alignments.tsv"
+    )
     write_fasta(reference_fasta, reference_sequences)
     write_fasta(candidate_fasta, candidate_sequences)
 
-    command = [
-        args.cd_hit_2d,
-        "-i",
-        str(reference_fasta),
-        "-i2",
-        str(candidate_fasta),
-        "-o",
-        str(nonhomologous_fasta),
-        "-c",
-        "0.30",
-        "-n",
-        "2",
-        "-G",
-        "1",
-        "-g",
-        "1",
-        "-b",
-        "20",
-        "-aS",
-        "0.80",
-        "-d",
-        "0",
-        "-T",
-        "0",
-        "-M",
-        "0",
-    ]
-    print("$", " ".join(command), flush=True)
-    completed = subprocess.run(
-        command, check=True, capture_output=True, text=True
+    search_identity = float(
+        protocol["homology_search_minimum_local_identity"]
     )
-    print(completed.stdout, flush=True)
-    retained_accessions = {
-        header.split()[0]
-        for header, _ in iter_fasta(nonhomologous_fasta)
-    }
+    sensitivity = float(protocol["homology_search_sensitivity"])
+    maximum_evalue = float(protocol["homology_search_maximum_evalue"])
+    with tempfile.TemporaryDirectory(prefix="ubipred_mmseqs_") as temporary:
+        temporary_root = Path(temporary)
+        temporary_alignments = temporary_root / "alignments.tsv"
+        temporary_work = temporary_root / "work"
+        command = [
+            args.mmseqs,
+            "easy-search",
+            str(candidate_fasta),
+            str(reference_fasta),
+            str(temporary_alignments),
+            str(temporary_work),
+            "--min-seq-id",
+            str(search_identity),
+            "-s",
+            str(sensitivity),
+            "-e",
+            str(maximum_evalue),
+            "--max-seqs",
+            "20000",
+            "--format-output",
+            "query,target,nident,qcov,tcov,qlen,tlen,evalue",
+        ]
+        print("$", " ".join(command), flush=True)
+        completed = subprocess.run(
+            command, check=False, capture_output=True, text=True
+        )
+        if completed.stdout:
+            print(completed.stdout, flush=True)
+        if completed.stderr:
+            print(completed.stderr, file=sys.stderr, flush=True)
+        if completed.returncode:
+            raise RuntimeError(
+                "MMseqs2 homology search failed with exit status "
+                f"{completed.returncode}"
+            )
+        shutil.copyfile(temporary_alignments, raw_alignments_path)
+
+    minimum_global_identity = float(protocol["maximum_sequence_identity"])
+    minimum_shorter_coverage = float(
+        protocol["minimum_shorter_sequence_coverage"]
+    )
+    raw_alignment_count = 0
+    qualifying_alignment_count = 0
+    homologous_accessions: set[str] = set()
+    with raw_alignments_path.open("r", encoding="utf-8") as source, (
+        qualifying_alignments_path.open("w", encoding="utf-8")
+    ) as destination:
+        destination.write(
+            "query\ttarget\tidentical_residues\tquery_coverage\t"
+            "target_coverage\tquery_length\ttarget_length\tevalue\t"
+            "global_identity_to_shorter\tshorter_sequence_coverage\n"
+        )
+        for line in source:
+            if not line.strip():
+                continue
+            raw_alignment_count += 1
+            hit = parse_mmseqs_homology_hit(line)
+            if (
+                hit.global_identity_to_shorter
+                < minimum_global_identity
+                or hit.shorter_sequence_coverage
+                < minimum_shorter_coverage
+            ):
+                continue
+            qualifying_alignment_count += 1
+            homologous_accessions.add(hit.query)
+            destination.write(
+                f"{hit.query}\t{hit.target}\t{hit.identical_residues}\t"
+                f"{hit.query_coverage}\t{hit.target_coverage}\t"
+                f"{hit.query_length}\t{hit.target_length}\t{hit.evalue}\t"
+                f"{hit.global_identity_to_shorter}\t"
+                f"{hit.shorter_sequence_coverage}\n"
+            )
+    retained_accessions = candidate_accessions - homologous_accessions
+    write_fasta(
+        nonhomologous_fasta,
+        {
+            accession: candidate_sequences[accession]
+            for accession in retained_accessions
+        },
+    )
     final_records = [
         record
         for record in pre_homology
@@ -301,8 +359,8 @@ def main() -> None:
                 }
             )
 
-    cd_hit_version = subprocess.run(
-        [args.cd_hit_2d, "-h"],
+    tool_version = subprocess.run(
+        [args.mmseqs, "version"],
         check=False,
         capture_output=True,
         text=True,
@@ -377,15 +435,35 @@ def main() -> None:
             "reason_counts": dict(sorted(leakage_reason_counts.items())),
         },
         "homology_filter": {
-            "tool": "CD-HIT-2D",
+            "tool": "MMseqs2",
             "command": command,
             "version_output_first_line": (
-                (cd_hit_version.stdout or cd_hit_version.stderr)
+                (tool_version.stdout or tool_version.stderr)
                 .strip()
                 .splitlines()[0]
-                if (cd_hit_version.stdout or cd_hit_version.stderr).strip()
+                if (tool_version.stdout or tool_version.stderr).strip()
                 else "unknown"
             ),
+            "search_minimum_local_identity": search_identity,
+            "search_sensitivity": sensitivity,
+            "search_maximum_evalue": maximum_evalue,
+            "global_identity_definition": (
+                "identical aligned residues divided by shorter full-protein "
+                "length"
+            ),
+            "minimum_global_identity": minimum_global_identity,
+            "minimum_shorter_sequence_coverage": minimum_shorter_coverage,
+            "raw_alignment_count": raw_alignment_count,
+            "qualifying_alignment_count": qualifying_alignment_count,
+            "homologous_external_accessions": len(homologous_accessions),
+            "raw_alignments": {
+                "path": str(raw_alignments_path),
+                "sha256": sha256_file(raw_alignments_path),
+            },
+            "qualifying_alignments": {
+                "path": str(qualifying_alignments_path),
+                "sha256": sha256_file(qualifying_alignments_path),
+            },
             "reference_unique_accessions": len(reference_accessions),
             "reference_sequences_available": len(reference_sequences),
             "reference_sequence_fraction": reference_fraction,

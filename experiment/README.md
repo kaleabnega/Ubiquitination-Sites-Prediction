@@ -234,9 +234,9 @@ Notebook 10 constructs a new external cohort from the released 2,077-site
 dbPTM/PTMGPT2 benchmark. It resolves historical entry names to canonical
 UniProt accessions, validates every published 21-mer against the stated
 coordinate, reconstructs matched 49- and 257-residue inputs,
-removes PLMD accession/site/window overlap, and applies CD-HIT-2D against PLMD
-training proteins at the frozen 30% identity and 80% shorter-sequence coverage
-rule.
+removes PLMD accession/site/window overlap, and applies high-sensitivity
+MMseqs2 against PLMD training proteins at the frozen 30% global-identity and
+80% shorter-sequence coverage rule.
 
 The cohort builder writes a checksum-locked manifest before inference. The
 primary candidate is already fixed as the equal `0.5/0.5` probability average

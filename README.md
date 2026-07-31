@@ -164,8 +164,8 @@ Before inference, every historical UniProt entry name is resolved to its
 canonical accession and every published 21-mer must map exactly to its stated
 position. The pipeline removes PLMD training and historical-test
 proteins, exact released sites and windows, and proteins matched to PLMD
-training proteins by CD-HIT-2D at 30% identity with 80% shorter-sequence
-coverage.
+training proteins by high-sensitivity MMseqs2 at 30% global identity with 80%
+shorter-sequence coverage.
 
 The candidate was frozen before this external evaluation: it is the
 equal-weight probability average of the authors' exact H5 model and the

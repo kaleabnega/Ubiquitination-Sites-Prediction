@@ -16,6 +16,7 @@ from ubipred.external_benchmark import (  # noqa: E402
     build_released_leakage_sets,
     leakage_reasons,
     load_external_benchmark,
+    parse_mmseqs_homology_hit,
     parse_external_identifier,
     sha256_file,
     validate_external_site,
@@ -93,6 +94,21 @@ class ExternalBenchmarkTests(unittest.TestCase):
         )
         self.assertIsNone(invalid)
         self.assertEqual(reason, "uniprot_center_is_not_lysine")
+
+    def test_mmseqs_hit_uses_shorter_full_protein_denominator(self) -> None:
+        hit = parse_mmseqs_homology_hit(
+            "Q1\tT1\t31\t0.81\t0.42\t100\t200\t1e-20\n"
+        )
+        self.assertAlmostEqual(hit.global_identity_to_shorter, 0.31)
+        self.assertAlmostEqual(hit.shorter_sequence_coverage, 0.81)
+
+        reverse = parse_mmseqs_homology_hit(
+            "Q2\tT2\t61\t0.45\t0.82\t300\t200\t1e-30\n"
+        )
+        self.assertAlmostEqual(
+            reverse.global_identity_to_shorter, 0.305
+        )
+        self.assertAlmostEqual(reverse.shorter_sequence_coverage, 0.82)
 
     def test_conservative_released_overlap_detection(self) -> None:
         released_window = centered_sequence_window(self.sequence, 51, 49)

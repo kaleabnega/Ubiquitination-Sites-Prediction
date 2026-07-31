@@ -43,12 +43,63 @@ class ValidatedExternalSite:
     context_257: str
 
 
+@dataclass(frozen=True)
+class HomologyHit:
+    """One MMseqs2 alignment with protocol-level global statistics."""
+
+    query: str
+    target: str
+    identical_residues: int
+    query_coverage: float
+    target_coverage: float
+    query_length: int
+    target_length: int
+    evalue: float
+    global_identity_to_shorter: float
+    shorter_sequence_coverage: float
+
+
 def sha256_file(path: str | Path) -> str:
     digest = hashlib.sha256()
     with Path(path).open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def parse_mmseqs_homology_hit(line: str) -> HomologyHit:
+    fields = line.rstrip("\n").split("\t")
+    if len(fields) != 8:
+        raise ValueError(
+            f"Expected eight MMseqs2 fields, received {len(fields)}"
+        )
+    query, target = fields[:2]
+    identical_residues = int(fields[2])
+    query_coverage = float(fields[3])
+    target_coverage = float(fields[4])
+    query_length = int(fields[5])
+    target_length = int(fields[6])
+    evalue = float(fields[7])
+    if query_length <= 0 or target_length <= 0:
+        raise ValueError("MMseqs2 sequence lengths must be positive")
+    shorter_length = min(query_length, target_length)
+    shorter_coverage = (
+        query_coverage
+        if query_length <= target_length
+        else target_coverage
+    )
+    return HomologyHit(
+        query=query,
+        target=target,
+        identical_residues=identical_residues,
+        query_coverage=query_coverage,
+        target_coverage=target_coverage,
+        query_length=query_length,
+        target_length=target_length,
+        evalue=evalue,
+        global_identity_to_shorter=identical_residues / shorter_length,
+        shorter_sequence_coverage=shorter_coverage,
+    )
 
 
 def parse_external_identifier(identifier: str) -> tuple[str, str, str, int]:

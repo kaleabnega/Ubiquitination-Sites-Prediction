@@ -25,12 +25,20 @@ Before inference, the cohort builder removes:
 1. every protein accession represented in the processed PLMD training set;
 2. every protein accession represented in the historical PLMD test set;
 3. every exact released site, central 21-mer, or 49-mer; and
-4. every remaining external protein matched by CD-HIT-2D to a PLMD training
-   protein at at least 30% global sequence identity and at least 80% coverage
-   of the shorter sequence.
+4. every remaining external protein matched by MMseqs2 to a PLMD training
+   protein at at least 30% global sequence identity—identical residues divided
+   by the shorter full-protein length—and at least 80% alignment coverage of
+   that shorter sequence.
+
+Standard CD-HIT-2D cannot perform protein comparisons below 40% identity, so
+the pre-inference protocol uses high-sensitivity MMseqs2 for the paper's 30%
+rule. The MMseqs2 search imposes no local-identity floor and uses an E-value
+ceiling of 0.001; the pipeline then applies the frozen global-identity and
+shorter-coverage rules itself to every reported alignment.
 
 The builder records input checksums, UniProt release metadata, exclusion
-counts, the exact CD-HIT-2D command, retained-accession hash, final cohort
+counts, the exact MMseqs2 command, qualifying alignments, retained-accession
+hash, final cohort
 hash, and class support. At least 80% of benchmark sites must map, at least
 98% of PLMD training proteins must have reference sequences, and the final
 cohort must contain at least 500 sites with at least 100 examples of each
