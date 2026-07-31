@@ -242,13 +242,9 @@ def main() -> None:
             "query,target,nident,qcov,tcov,qlen,tlen,evalue",
         ]
         print("$", " ".join(command), flush=True)
-        completed = subprocess.run(
-            command, check=False, capture_output=True, text=True
-        )
-        if completed.stdout:
-            print(completed.stdout, flush=True)
-        if completed.stderr:
-            print(completed.stderr, file=sys.stderr, flush=True)
+        # Inherit stdout/stderr so Colab receives MMseqs2 progress and any
+        # failure diagnostic immediately through the notebook's live runner.
+        completed = subprocess.run(command, check=False)
         if completed.returncode:
             raise RuntimeError(
                 "MMseqs2 homology search failed with exit status "
