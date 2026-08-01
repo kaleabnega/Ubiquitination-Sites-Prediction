@@ -165,7 +165,11 @@ canonical accession and every published 21-mer must map exactly to its stated
 position. The pipeline removes PLMD training and historical-test
 proteins, exact released sites and windows, and proteins matched to PLMD
 training proteins by high-sensitivity MMseqs2 at 30% global identity with 80%
-shorter-sequence coverage.
+shorter-sequence coverage. The corrected v2 search explicitly requests
+MMseqs2 alignment backtraces so its exported identical-residue counts are
+valid, and refuses to freeze a cohort if all such counts are zero. The v1
+cohort attempt was invalidated before model inference and is preserved only
+as provenance.
 
 The candidate was frozen before this external evaluation: it is the
 equal-weight probability average of the authors' exact H5 model and the
@@ -177,7 +181,7 @@ external inference requires a separate explicit acknowledgement.
 [Open the external dbPTM/PTMGPT2 validation notebook](experiment/notebooks/10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb)
 
 Read the frozen
-[external-validation contract](experiment/methods/external_dbptm_ptmgpt2_v1.md).
+[external-validation contract](experiment/methods/external_dbptm_ptmgpt2_v2.md).
 
 ## Repository layout
 

@@ -236,7 +236,10 @@ UniProt accessions, validates every published 21-mer against the stated
 coordinate, reconstructs matched 49- and 257-residue inputs,
 removes PLMD accession/site/window overlap, and applies high-sensitivity
 MMseqs2 against PLMD training proteins at the frozen 30% global-identity and
-80% shorter-sequence coverage rule.
+80% shorter-sequence coverage rule. The amended v2 command requests alignment
+backtraces before exporting identical-residue counts and fails closed if all
+reported identities are zero. The v1 construction was invalidated before any
+external inference and remains provenance only.
 
 The cohort builder writes a checksum-locked manifest before inference. The
 primary candidate is already fixed as the equal `0.5/0.5` probability average
@@ -248,7 +251,7 @@ sites.
 [Open external dbPTM/PTMGPT2 validation in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb)
 
 See the frozen
-[`external-validation contract`](methods/external_dbptm_ptmgpt2_v1.md).
+[`external-validation contract`](methods/external_dbptm_ptmgpt2_v2.md).
 
 ## Layout
 

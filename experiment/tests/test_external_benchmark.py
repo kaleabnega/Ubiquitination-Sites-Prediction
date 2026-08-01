@@ -110,6 +110,18 @@ class ExternalBenchmarkTests(unittest.TestCase):
         )
         self.assertAlmostEqual(reverse.shorter_sequence_coverage, 0.82)
 
+    def test_mmseqs_hit_rejects_invalid_alignment_statistics(self) -> None:
+        invalid_lines = [
+            "Q1\tT1\t-1\t0.8\t0.8\t100\t100\t1e-4\n",
+            "Q1\tT1\t101\t0.8\t0.8\t100\t100\t1e-4\n",
+            "Q1\tT1\t20\t1.1\t0.8\t100\t100\t1e-4\n",
+            "Q1\tT1\t20\t0.8\t-0.1\t100\t100\t1e-4\n",
+            "Q1\tT1\t20\t0.8\t0.8\t100\t100\t-1\n",
+        ]
+        for line in invalid_lines:
+            with self.subTest(line=line), self.assertRaises(ValueError):
+                parse_mmseqs_homology_hit(line)
+
     def test_conservative_released_overlap_detection(self) -> None:
         released_window = centered_sequence_window(self.sequence, 51, 49)
         train_record = SiteRecord(

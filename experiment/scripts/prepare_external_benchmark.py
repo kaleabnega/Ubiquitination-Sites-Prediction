@@ -121,6 +121,7 @@ def main() -> None:
         or not bool(protocol["exclude_historical_test_accessions"])
         or not bool(protocol["exclude_exact_released_windows"])
         or protocol["homology_tool"] != "MMseqs2"
+        or not bool(protocol.get("require_alignment_backtrace", False))
     ):
         raise ValueError("Cohort protocol differs from the frozen contract")
 
@@ -238,6 +239,7 @@ def main() -> None:
             str(maximum_evalue),
             "--max-seqs",
             "20000",
+            "-a",
             "--format-output",
             "query,target,nident,qcov,tcov,qlen,tlen,evalue",
         ]
@@ -258,6 +260,8 @@ def main() -> None:
     )
     raw_alignment_count = 0
     qualifying_alignment_count = 0
+    maximum_identical_residues = 0
+    maximum_global_identity_observed = 0.0
     homologous_accessions: set[str] = set()
     with raw_alignments_path.open("r", encoding="utf-8") as source, (
         qualifying_alignments_path.open("w", encoding="utf-8")
@@ -272,6 +276,13 @@ def main() -> None:
                 continue
             raw_alignment_count += 1
             hit = parse_mmseqs_homology_hit(line)
+            maximum_identical_residues = max(
+                maximum_identical_residues, hit.identical_residues
+            )
+            maximum_global_identity_observed = max(
+                maximum_global_identity_observed,
+                hit.global_identity_to_shorter,
+            )
             if (
                 hit.global_identity_to_shorter
                 < minimum_global_identity
@@ -288,6 +299,13 @@ def main() -> None:
                 f"{hit.global_identity_to_shorter}\t"
                 f"{hit.shorter_sequence_coverage}\n"
             )
+    if raw_alignment_count and maximum_identical_residues == 0:
+        raise RuntimeError(
+            "MMseqs2 reported alignments but every nident value was zero. "
+            "Refusing to freeze the cohort because alignment-derived "
+            "identity statistics are invalid. Verify that the search used "
+            "the -a alignment-backtrace option."
+        )
     retained_accessions = candidate_accessions - homologous_accessions
     write_fasta(
         nonhomologous_fasta,
@@ -443,6 +461,7 @@ def main() -> None:
             "search_minimum_local_identity": search_identity,
             "search_sensitivity": sensitivity,
             "search_maximum_evalue": maximum_evalue,
+            "alignment_backtrace_requested": True,
             "global_identity_definition": (
                 "identical aligned residues divided by shorter full-protein "
                 "length"
@@ -450,6 +469,10 @@ def main() -> None:
             "minimum_global_identity": minimum_global_identity,
             "minimum_shorter_sequence_coverage": minimum_shorter_coverage,
             "raw_alignment_count": raw_alignment_count,
+            "maximum_identical_residues": maximum_identical_residues,
+            "maximum_global_identity_observed": (
+                maximum_global_identity_observed
+            ),
             "qualifying_alignment_count": qualifying_alignment_count,
             "homologous_external_accessions": len(homologous_accessions),
             "raw_alignments": {

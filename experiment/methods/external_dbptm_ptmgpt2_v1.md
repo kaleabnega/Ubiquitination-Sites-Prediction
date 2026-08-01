@@ -1,5 +1,13 @@
 # External dbPTM/PTMGPT2 validation v1
 
+> **Invalidated before inference.** The first cohort-construction run omitted
+> MMseqs2's `-a` alignment-backtrace option while requesting the alignment-
+> derived `nident` field. All 18,196 reported alignments consequently contained
+> `nident=0`, making the 30% identity filter non-functional. No external model
+> predictions or metrics were generated. The preserved v1 lock is diagnostic
+> provenance only and must not be used for evaluation. The corrected,
+> pre-inference amendment is specified in v2.
+
 ## Purpose
 
 This protocol tests whether the already frozen exact-MMUbiPred/context

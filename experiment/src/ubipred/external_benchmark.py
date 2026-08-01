@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -82,6 +83,19 @@ def parse_mmseqs_homology_hit(line: str) -> HomologyHit:
     evalue = float(fields[7])
     if query_length <= 0 or target_length <= 0:
         raise ValueError("MMseqs2 sequence lengths must be positive")
+    if identical_residues < 0:
+        raise ValueError("MMseqs2 identical-residue count cannot be negative")
+    if identical_residues > min(query_length, target_length):
+        raise ValueError(
+            "MMseqs2 identical-residue count exceeds the shorter sequence"
+        )
+    if not all(
+        math.isfinite(value) and 0.0 <= value <= 1.0
+        for value in (query_coverage, target_coverage)
+    ):
+        raise ValueError("MMseqs2 coverage values must be within [0, 1]")
+    if not math.isfinite(evalue) or evalue < 0:
+        raise ValueError("MMseqs2 E-value must be finite and non-negative")
     shorter_length = min(query_length, target_length)
     shorter_coverage = (
         query_coverage
