@@ -319,16 +319,59 @@ def main() -> None:
         for record in pre_homology
         if record.canonical_accession in retained_accessions
     ]
+    final_support = label_counts(final_records)
+    minimum_size = int(protocol["minimum_final_sites"])
+    minimum_per_class = int(protocol["minimum_final_sites_per_class"])
+    feasibility_path = output_dir / "cohort_feasibility.json"
+    feasibility = {
+        "status": "pre-inference cohort feasibility audit; cohort not frozen",
+        "external_predictions_generated": False,
+        "labels_used_for_model_or_threshold_selection": False,
+        "validated_sites": len(validated),
+        "sites_after_exact_leakage_filter": len(pre_homology),
+        "homology_filter": {
+            "alignment_backtrace_requested": True,
+            "raw_alignment_count": raw_alignment_count,
+            "maximum_identical_residues": maximum_identical_residues,
+            "maximum_global_identity_observed": (
+                maximum_global_identity_observed
+            ),
+            "qualifying_alignment_count": qualifying_alignment_count,
+            "homologous_external_accessions": len(homologous_accessions),
+            "retained_unique_accessions": len(retained_accessions),
+        },
+        "prospective_final_cohort": {
+            "sites": len(final_records),
+            "unique_accessions": len(
+                {record.canonical_accession for record in final_records}
+            ),
+            "support": final_support,
+        },
+        "configured_minimums": {
+            "sites": minimum_size,
+            "sites_per_class": minimum_per_class,
+        },
+        "passes_configured_minimums": (
+            len(final_records) >= minimum_size
+            and final_support["negative"] >= minimum_per_class
+            and final_support["positive"] >= minimum_per_class
+        ),
+        "artifacts": {
+            "raw_alignments_sha256": sha256_file(raw_alignments_path),
+            "qualifying_alignments_sha256": sha256_file(
+                qualifying_alignments_path
+            ),
+        },
+    }
+    write_json(feasibility_path, feasibility)
+    print(json.dumps(feasibility, indent=2, sort_keys=True), flush=True)
     if not final_records:
         raise RuntimeError("Homology filtering removed the entire cohort")
-    minimum_size = int(protocol["minimum_final_sites"])
     if len(final_records) < minimum_size:
         raise RuntimeError(
             f"Final cohort has {len(final_records)} sites; "
             f"protocol requires at least {minimum_size}"
         )
-    final_support = label_counts(final_records)
-    minimum_per_class = int(protocol["minimum_final_sites_per_class"])
     if min(final_support["negative"], final_support["positive"]) < minimum_per_class:
         raise RuntimeError(
             f"Final class support {final_support} is below the frozen "

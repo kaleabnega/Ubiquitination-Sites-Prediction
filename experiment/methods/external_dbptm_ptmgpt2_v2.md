@@ -20,6 +20,12 @@ Because v1 stopped before inference and no external predictions or metrics
 were inspected, this amendment does not use external labels to tune the model
 or evaluation protocol.
 
+If the corrected homology filter leaves fewer records than the frozen minimum,
+the builder writes a non-frozen `cohort_feasibility.json` before stopping. It
+contains only mapping, homology, retained-site, unique-protein, and class-
+support counts; it contains no model predictions or performance metrics. Any
+subsequent feasibility amendment must be versioned before inference.
+
 ## Cohort construction and evaluation
 
 All remaining procedures follow the v1 contract: current UniProt sequences
