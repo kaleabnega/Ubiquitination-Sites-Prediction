@@ -1,0 +1,66 @@
+{
+  "experiment_name": "external_dbptm_disjoint_holdout_v1",
+  "source_benchmark": "dbptm_ubiquitination_normalized.csv",
+  "source_benchmark_sha256": "a7b868907291ec62911b6ed2ec76c5e8eb99eafdd650fc8780ad1e91996cc3e3",
+  "source_archive": {
+    "url": "https://biomics.lab.nycu.edu.tw/dbPTM/download/benchmark/Ubiquitination.tgz",
+    "sha256": "8b74e4fbc7b36ed50c015a98a6c17a891d438982e39bb40b7ad127ab8a3c6547",
+    "raw_positive_sites": 9767,
+    "raw_negative_sites": 8579,
+    "normalized_positive_sites": 9124,
+    "normalized_negative_sites": 6573,
+    "negative_label_semantics": "dbPTM benchmark database-negative; absence of a reported ubiquitination annotation is not experimental proof of non-ubiquitination"
+  },
+  "cohort_protocol": {
+    "exclude_training_accessions": true,
+    "exclude_historical_test_accessions": true,
+    "exclude_exact_released_windows": true,
+    "exclude_prior_external_source": true,
+    "homology_reference": "union of full UniProt proteins represented in the processed PLMD training split and every resolved protein in the previously used 2077-site dbPTM/PTMGPT2 source",
+    "maximum_sequence_identity": 0.3,
+    "minimum_shorter_sequence_coverage": 0.8,
+    "homology_tool": "MMseqs2",
+    "homology_search_minimum_local_identity": 0.0,
+    "homology_search_sensitivity": 7.5,
+    "homology_search_maximum_evalue": 0.001,
+    "require_alignment_backtrace": true,
+    "paper_window_size": 49,
+    "context_window_size": 257,
+    "minimum_mapping_fraction": 0.6,
+    "minimum_reference_sequence_fraction": 0.98,
+    "minimum_final_sites": 750,
+    "minimum_final_sites_per_class": 200,
+    "minimum_final_unique_accessions": 400
+  },
+  "frozen_evaluation": {
+    "primary_candidate": "frozen_seven_epoch_context_model",
+    "primary_comparator": "exact_released_mmubipred",
+    "primary_metric": "auroc",
+    "primary_success_rule": "lower bound of the two-sided 95% protein-cluster bootstrap confidence interval for context-minus-MMUbiPred AUROC is greater than zero",
+    "secondary_metrics": [
+      "mcc",
+      "accuracy",
+      "sensitivity",
+      "specificity",
+      "precision",
+      "f1",
+      "auprc"
+    ],
+    "primary_threshold": 0.5,
+    "threshold_selection": "none",
+    "bootstrap_replicates": 10000,
+    "bootstrap_seed": 20260803,
+    "bootstrap_unit": "canonical_accession",
+    "confidence_level": 0.95,
+    "prior_external_result_informed_hypothesis": true,
+    "prior_external_auroc_difference": 0.0339211904105815,
+    "external_labels_may_not_select_model_or_threshold": true
+  },
+  "context_model": {
+    "config": "experiment/configs/mmubipred_context_residual_v1.json",
+    "experiment_name": "mmubipred_context_only_final_v1",
+    "refit_epochs": 7,
+    "architecture": "long_context_lora_esm2_v1"
+  },
+  "released_mmubipred_sha256": "a9393c05635f8019d08fe916885bdf3f31225859b2d0cb4130ec4c2bd89a5001"
+}

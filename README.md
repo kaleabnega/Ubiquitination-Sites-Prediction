@@ -188,6 +188,27 @@ model or replacing the ensemble primary endpoint.
 Read the frozen
 [external-validation contract](experiment/methods/external_dbptm_ptmgpt2_v3.md).
 
+## Disjoint larger dbPTM holdout
+
+Notebook 11 constructs a larger follow-up cohort from the official dbPTM
+ubiquitination benchmark archive. The earlier 2,077-site external source is an
+exact subset of that archive, so the new protocol excludes the complete prior
+source and adds its resolved proteins to the MMseqs2 homology reference along
+with PLMD training proteins. Source normalization, UniProt coordinate
+validation, exact-overlap filtering, and the 30% identity/80% shorter-coverage
+rule all occur before prediction.
+
+The frozen, prior-informed hypothesis compares the seven-epoch context model
+directly with exact MMUbiPred using AUROC as the single primary metric. Cohort
+construction requires at least 750 sites, 200 per class, and 400 proteins. The
+notebook intentionally ends at the cohort audit; inference will only be added
+after feasibility passes.
+
+[Open the disjoint dbPTM holdout notebook](experiment/notebooks/11_Disjoint_dbPTM_Holdout_v1_Colab.ipynb)
+
+Read the
+[disjoint-holdout contract](experiment/methods/external_dbptm_disjoint_holdout_v1.md).
+
 ## Repository layout
 
 ```text

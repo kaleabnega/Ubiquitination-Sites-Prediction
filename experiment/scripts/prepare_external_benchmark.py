@@ -33,11 +33,6 @@ from ubipred.external_benchmark import (  # noqa: E402
 from ubipred.fasta import load_released_split  # noqa: E402
 
 
-EXPECTED_BENCHMARK_SHA256 = (
-    "c303df3ab199b3aa3d4c754aa3cd255343740298c11b1c03f55b8f2c4474ab9f"
-)
-
-
 def resolve_project_path(value: str | Path) -> Path:
     path = Path(value)
     return path if path.is_absolute() else PROJECT_ROOT / path
@@ -75,6 +70,9 @@ def main() -> None:
     parser.add_argument("--released-model", type=Path, required=True)
     parser.add_argument("--context-run-dir", type=Path, required=True)
     parser.add_argument("--feasibility-reference-dir", type=Path)
+    parser.add_argument("--prior-external-benchmark", type=Path)
+    parser.add_argument("--prior-external-sequence-cache", type=Path)
+    parser.add_argument("--prior-external-cohort-dir", type=Path)
     parser.add_argument(
         "--data-dir", default="replication/MMUbiPred"
     )
@@ -93,6 +91,21 @@ def main() -> None:
         if args.feasibility_reference_dir is not None
         else None
     )
+    prior_external_benchmark_path = (
+        resolve_project_path(args.prior_external_benchmark)
+        if args.prior_external_benchmark is not None
+        else None
+    )
+    prior_external_cache_path = (
+        resolve_project_path(args.prior_external_sequence_cache)
+        if args.prior_external_sequence_cache is not None
+        else None
+    )
+    prior_external_cohort_dir = (
+        resolve_project_path(args.prior_external_cohort_dir)
+        if args.prior_external_cohort_dir is not None
+        else None
+    )
     data_dir = resolve_project_path(args.data_dir)
     output_dir = resolve_project_path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -102,12 +115,10 @@ def main() -> None:
         raise FileExistsError(
             "Refusing to overwrite an already frozen external cohort"
         )
-    if sha256_file(benchmark_path) != EXPECTED_BENCHMARK_SHA256:
-        raise ValueError("External benchmark checksum does not match protocol")
-
     config = json.loads(config_path.read_text(encoding="utf-8"))
-    if config["source_benchmark_sha256"] != EXPECTED_BENCHMARK_SHA256:
-        raise ValueError("Configured benchmark checksum changed")
+    expected_benchmark_sha256 = str(config["source_benchmark_sha256"])
+    if sha256_file(benchmark_path) != expected_benchmark_sha256:
+        raise ValueError("External benchmark checksum does not match protocol")
     if (
         sha256_file(released_model_path)
         != config["released_mmubipred_sha256"]
@@ -173,6 +184,74 @@ def main() -> None:
         train_records, test_records
     )
 
+    exclude_prior_external = bool(
+        protocol.get("exclude_prior_external_source", False)
+    )
+    prior_external_sequences: dict[str, str] = {}
+    prior_external_metadata: dict[str, object] = {}
+    prior_canonical_map: dict[str, object] = {}
+    prior_source_protein_ids: set[str] = set()
+    prior_identifiers: set[str] = set()
+    prior_windows_21: set[str] = set()
+    prior_canonical_accessions: set[str] = set()
+    prior_cohort_accessions: set[str] = set()
+    prior_cohort_sites: set[tuple[str, int]] = set()
+    prior_cohort_windows_49: set[str] = set()
+    if exclude_prior_external:
+        if (
+            prior_external_benchmark_path is None
+            or prior_external_cache_path is None
+            or prior_external_cohort_dir is None
+        ):
+            raise ValueError(
+                "Prior external benchmark, sequence cache, and cohort are "
+                "required by this protocol"
+            )
+        prior_records = load_external_benchmark(
+            prior_external_benchmark_path
+        )
+        prior_source_protein_ids = {
+            record.source_protein_id for record in prior_records
+        }
+        prior_identifiers = {record.identifier for record in prior_records}
+        prior_windows_21 = {record.window_21 for record in prior_records}
+        (
+            prior_external_sequences,
+            prior_external_metadata,
+        ) = load_sequence_cache(prior_external_cache_path)
+        raw_prior_canonical_map = prior_external_metadata.get(
+            "canonical_accessions"
+        )
+        if not isinstance(raw_prior_canonical_map, dict):
+            raise ValueError(
+                "Prior external cache lacks canonical accession mappings"
+            )
+        prior_canonical_map = raw_prior_canonical_map
+        prior_canonical_accessions = {
+            str(accession) for accession in prior_canonical_map.values()
+        }
+        prior_cohort_path = (
+            prior_external_cohort_dir / "external_cohort.tsv"
+        )
+        with prior_cohort_path.open(
+            "r", encoding="utf-8", newline=""
+        ) as handle:
+            prior_cohort_rows = list(
+                csv.DictReader(handle, delimiter="\t")
+            )
+        if not prior_cohort_rows:
+            raise ValueError("Prior external cohort is empty")
+        prior_cohort_accessions = {
+            row["canonical_accession"] for row in prior_cohort_rows
+        }
+        prior_cohort_sites = {
+            (row["canonical_accession"], int(row["position_one_based"]))
+            for row in prior_cohort_rows
+        }
+        prior_cohort_windows_49 = {
+            row["window_49"] for row in prior_cohort_rows
+        }
+
     validation_reasons: Counter[str] = Counter()
     leakage_reason_counts: Counter[str] = Counter()
     validated = []
@@ -189,6 +268,25 @@ def main() -> None:
             continue
         validated.append(record)
         reasons = leakage_reasons(record, leakage_sets)
+        if exclude_prior_external:
+            site = record.site
+            if site.source_protein_id in prior_source_protein_ids:
+                reasons.append("prior_external_source_protein_overlap")
+            if site.identifier in prior_identifiers:
+                reasons.append("prior_external_identifier_overlap")
+            if site.window_21 in prior_windows_21:
+                reasons.append("prior_external_21mer_overlap")
+            if record.canonical_accession in prior_canonical_accessions:
+                reasons.append("prior_external_canonical_accession_overlap")
+            if record.canonical_accession in prior_cohort_accessions:
+                reasons.append("prior_frozen_cohort_accession_overlap")
+            if (
+                record.canonical_accession,
+                site.position,
+            ) in prior_cohort_sites:
+                reasons.append("prior_frozen_cohort_site_overlap")
+            if record.window_49 in prior_cohort_windows_49:
+                reasons.append("prior_frozen_cohort_49mer_overlap")
         leakage_reason_counts.update(reasons)
         if not reasons:
             pre_homology.append(record)
@@ -215,6 +313,21 @@ def main() -> None:
         for accession in reference_accessions
         if accession in training_sequences
     }
+    homology_reference_sequences = dict(reference_sequences)
+    if exclude_prior_external:
+        for source_protein_id, sequence in prior_external_sequences.items():
+            canonical_accession = prior_canonical_map.get(source_protein_id)
+            if canonical_accession is None:
+                continue
+            canonical_accession = str(canonical_accession)
+            previous = homology_reference_sequences.setdefault(
+                canonical_accession, sequence
+            )
+            if previous != sequence:
+                raise ValueError(
+                    "Conflicting homology-reference sequences for "
+                    f"{canonical_accession}"
+                )
     mapping_fraction = len(validated) / len(benchmark)
     if mapping_fraction < float(protocol["minimum_mapping_fraction"]):
         raise RuntimeError(
@@ -229,14 +342,14 @@ def main() -> None:
             f"Only {reference_fraction:.4f} of PLMD training proteins have "
             "reference sequences; below the frozen minimum"
         )
-    reference_fasta = output_dir / "plmd_training_proteins.fasta"
+    reference_fasta = output_dir / "homology_reference_proteins.fasta"
     candidate_fasta = output_dir / "pre_homology_external_proteins.fasta"
     nonhomologous_fasta = output_dir / "nonhomologous_external_proteins.fasta"
     raw_alignments_path = output_dir / "mmseqs_alignments.tsv"
     qualifying_alignments_path = (
         output_dir / "qualifying_homology_alignments.tsv"
     )
-    write_fasta(reference_fasta, reference_sequences)
+    write_fasta(reference_fasta, homology_reference_sequences)
     write_fasta(candidate_fasta, candidate_sequences)
 
     search_identity = float(
@@ -346,6 +459,12 @@ def main() -> None:
     final_support = label_counts(final_records)
     minimum_size = int(protocol["minimum_final_sites"])
     minimum_per_class = int(protocol["minimum_final_sites_per_class"])
+    minimum_unique_accessions = int(
+        protocol.get("minimum_final_unique_accessions", 1)
+    )
+    final_unique_accessions = len(
+        {record.canonical_accession for record in final_records}
+    )
     feasibility_path = output_dir / "cohort_feasibility.json"
     feasibility = {
         "status": "pre-inference cohort feasibility audit; cohort not frozen",
@@ -366,19 +485,19 @@ def main() -> None:
         },
         "prospective_final_cohort": {
             "sites": len(final_records),
-            "unique_accessions": len(
-                {record.canonical_accession for record in final_records}
-            ),
+            "unique_accessions": final_unique_accessions,
             "support": final_support,
         },
         "configured_minimums": {
             "sites": minimum_size,
             "sites_per_class": minimum_per_class,
+            "unique_accessions": minimum_unique_accessions,
         },
         "passes_configured_minimums": (
             len(final_records) >= minimum_size
             and final_support["negative"] >= minimum_per_class
             and final_support["positive"] >= minimum_per_class
+            and final_unique_accessions >= minimum_unique_accessions
         ),
         "artifacts": {
             "raw_alignments_sha256": sha256_file(raw_alignments_path),
@@ -467,6 +586,11 @@ def main() -> None:
             f"Final class support {final_support} is below the frozen "
             f"minimum of {minimum_per_class} per class"
         )
+    if final_unique_accessions < minimum_unique_accessions:
+        raise RuntimeError(
+            f"Final cohort has {final_unique_accessions} unique proteins; "
+            f"protocol requires at least {minimum_unique_accessions}"
+        )
 
     fieldnames = [
         "benchmark_index",
@@ -538,6 +662,20 @@ def main() -> None:
                 "sha256": sequence_cache_sha256(training_cache_path),
                 "metadata": training_metadata,
             },
+            **(
+                {
+                    "prior_external": {
+                        "path": str(prior_external_cache_path),
+                        "sha256": sequence_cache_sha256(
+                            prior_external_cache_path
+                        ),
+                        "metadata": prior_external_metadata,
+                    }
+                }
+                if exclude_prior_external
+                and prior_external_cache_path is not None
+                else {}
+            ),
         },
         "frozen_model_artifacts": {
             "released_mmubipred": {
@@ -580,6 +718,26 @@ def main() -> None:
             "sites_before_filter": len(validated),
             "sites_after_filter": len(pre_homology),
             "reason_counts": dict(sorted(leakage_reason_counts.items())),
+            "prior_external_source_excluded": exclude_prior_external,
+            **(
+                {
+                    "prior_external_benchmark": {
+                        "path": str(prior_external_benchmark_path),
+                        "sha256": sha256_file(
+                            prior_external_benchmark_path
+                        ),
+                        "raw_sites": len(prior_records),
+                    },
+                    "prior_external_frozen_cohort": {
+                        "path": str(prior_cohort_path),
+                        "sha256": sha256_file(prior_cohort_path),
+                        "sites": len(prior_cohort_rows),
+                    },
+                }
+                if exclude_prior_external
+                and prior_external_benchmark_path is not None
+                else {}
+            ),
         },
         "homology_filter": {
             "tool": "MMseqs2",
@@ -619,6 +777,13 @@ def main() -> None:
             "reference_unique_accessions": len(reference_accessions),
             "reference_sequences_available": len(reference_sequences),
             "reference_sequence_fraction": reference_fraction,
+            "homology_reference_unique_accessions": len(
+                homology_reference_sequences
+            ),
+            "prior_external_homology_references_added": (
+                len(homology_reference_sequences)
+                - len(reference_sequences)
+            ),
             "candidate_unique_accessions": len(candidate_accessions),
             "retained_unique_accessions": len(retained_accessions),
             "retained_accessions_sha256": hash_string_values(
