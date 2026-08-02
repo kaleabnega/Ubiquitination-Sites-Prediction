@@ -21,6 +21,13 @@ hashes. It also requires the exact prospective site, class, and protein counts.
 This order-independent correction was made after a v3 construction failure and
 before any external model inference.
 
+After the frozen primary evaluation, the context expert may be compared with
+exact MMUbiPred using the already saved site-paired predictions and the same
+canonical-accession cluster bootstrap. The context expert was a predeclared
+secondary comparator, but this follow-up cannot replace the ensemble as the
+primary candidate. Its intervals and p-values are reported as unadjusted
+secondary analyses, and the script performs no new inference.
+
 ## Unchanged scientific contract
 
 The source benchmark, UniProt mapping, exact-overlap filters, 30% identity over

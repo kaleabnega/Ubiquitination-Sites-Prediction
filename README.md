@@ -179,6 +179,9 @@ seven-epoch context model, evaluated at threshold `0.5`. MCC is primary and
 10,000 paired protein-cluster bootstrap replicates quantify candidate-minus-
 paper uncertainty. The notebook deliberately stops after writing the cohort
 lock; external inference requires a separate explicit acknowledgement.
+After the one-time evaluation, a guarded saved-prediction analysis provides the
+predeclared context-versus-paper secondary comparison without rerunning either
+model or replacing the ensemble primary endpoint.
 
 [Open the external dbPTM/PTMGPT2 validation notebook](experiment/notebooks/10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb)
 

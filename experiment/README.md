@@ -250,6 +250,9 @@ of the authors' exact H5 model and the frozen seven-epoch context model at
 threshold `0.5`. MCC is primary; paired protein-cluster bootstrap intervals
 compare it with the exact paper model on identical sites. Site-level McNemar
 counts are retained as descriptive diagnostics only.
+The notebook also provides a guarded context-versus-paper secondary comparison
+from the immutable saved predictions. It performs no new inference and reports
+unadjusted secondary intervals without replacing the ensemble primary test.
 
 [Open external dbPTM/PTMGPT2 validation in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb)
 
