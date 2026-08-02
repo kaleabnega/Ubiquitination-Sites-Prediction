@@ -68,6 +68,16 @@ def sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
+def canonical_line_sha256(path: str | Path) -> str:
+    """Hash non-empty text lines independently of their file ordering."""
+
+    with Path(path).open("r", encoding="utf-8") as handle:
+        lines = sorted(line.rstrip("\r\n") for line in handle if line.strip())
+    return hashlib.sha256(
+        ("\n".join(lines) + "\n").encode("utf-8")
+    ).hexdigest()
+
+
 def parse_mmseqs_homology_hit(line: str) -> HomologyHit:
     fields = line.rstrip("\n").split("\t")
     if len(fields) != 8:

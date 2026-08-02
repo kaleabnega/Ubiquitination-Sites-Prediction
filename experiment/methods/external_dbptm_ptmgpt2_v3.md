@@ -14,6 +14,13 @@ reproduced before the builder can freeze v3. The smaller cohort provides less
 precision than originally planned, so conclusions must be based on confidence
 intervals and described as limited-size external validation.
 
+MMseqs2 may emit identical alignments in a different row order across repeated
+runs. V3 therefore verifies the preserved v2 files against their original byte
+hashes, then compares v2 and v3 alignment content using sorted-line canonical
+hashes. It also requires the exact prospective site, class, and protein counts.
+This order-independent correction was made after a v3 construction failure and
+before any external model inference.
+
 ## Unchanged scientific contract
 
 The source benchmark, UniProt mapping, exact-overlap filters, 30% identity over

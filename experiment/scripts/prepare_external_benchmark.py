@@ -22,6 +22,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "experiment" / "src"))
 from ubipred.context import load_sequence_cache, sequence_cache_sha256  # noqa: E402
 from ubipred.external_benchmark import (  # noqa: E402
     build_released_leakage_sets,
+    canonical_line_sha256,
     label_counts,
     leakage_reasons,
     load_external_benchmark,
@@ -73,6 +74,7 @@ def main() -> None:
     parser.add_argument("--training-sequence-cache", type=Path, required=True)
     parser.add_argument("--released-model", type=Path, required=True)
     parser.add_argument("--context-run-dir", type=Path, required=True)
+    parser.add_argument("--feasibility-reference-dir", type=Path)
     parser.add_argument(
         "--data-dir", default="replication/MMUbiPred"
     )
@@ -86,6 +88,11 @@ def main() -> None:
     training_cache_path = resolve_project_path(args.training_sequence_cache)
     released_model_path = resolve_project_path(args.released_model)
     context_run_dir = resolve_project_path(args.context_run_dir)
+    feasibility_reference_dir = (
+        resolve_project_path(args.feasibility_reference_dir)
+        if args.feasibility_reference_dir is not None
+        else None
+    )
     data_dir = resolve_project_path(args.data_dir)
     output_dir = resolve_project_path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -382,13 +389,46 @@ def main() -> None:
     }
     amendment = config.get("feasibility_amendment")
     if amendment is not None:
+        if feasibility_reference_dir is None:
+            raise ValueError(
+                "The amended protocol requires --feasibility-reference-dir"
+            )
+        reference_raw = feasibility_reference_dir / "mmseqs_alignments.tsv"
+        reference_qualifying = (
+            feasibility_reference_dir / "qualifying_homology_alignments.tsv"
+        )
+        for reference_path in (reference_raw, reference_qualifying):
+            if not reference_path.exists():
+                raise FileNotFoundError(
+                    f"Missing v2 feasibility artifact: {reference_path}"
+                )
+        if (
+            sha256_file(reference_raw)
+            != amendment["v2_raw_alignments_sha256"]
+            or sha256_file(reference_qualifying)
+            != amendment["v2_qualifying_alignments_sha256"]
+        ):
+            raise RuntimeError(
+                "The preserved v2 feasibility artifacts changed"
+            )
+        reference_canonical_hashes = {
+            "raw_alignments": canonical_line_sha256(reference_raw),
+            "qualifying_alignments": canonical_line_sha256(
+                reference_qualifying
+            ),
+        }
+        observed_canonical_hashes = {
+            "raw_alignments": canonical_line_sha256(raw_alignments_path),
+            "qualifying_alignments": canonical_line_sha256(
+                qualifying_alignments_path
+            ),
+        }
+        if observed_canonical_hashes != reference_canonical_hashes:
+            raise RuntimeError(
+                "V3 alignment content differs from the preserved v2 "
+                "feasibility audit; refusing to freeze"
+            )
         observed_amendment_basis = {
-            "v2_raw_alignments_sha256": feasibility["artifacts"][
-                "raw_alignments_sha256"
-            ],
-            "v2_qualifying_alignments_sha256": feasibility["artifacts"][
-                "qualifying_alignments_sha256"
-            ],
             "prospective_sites": len(final_records),
             "prospective_negative_sites": final_support["negative"],
             "prospective_positive_sites": final_support["positive"],
@@ -404,7 +444,15 @@ def main() -> None:
                 "Observed cohort differs from the frozen feasibility "
                 "amendment; refusing to freeze v3"
             )
-        feasibility["feasibility_amendment_verified"] = True
+        feasibility["feasibility_amendment_verification"] = {
+            "verified": True,
+            "reference_directory": str(feasibility_reference_dir),
+            "reference_byte_hashes_match_v2": True,
+            "order_independent_alignment_hashes": (
+                observed_canonical_hashes
+            ),
+            "prospective_counts_match_v2": True,
+        }
     write_json(feasibility_path, feasibility)
     print(json.dumps(feasibility, indent=2, sort_keys=True), flush=True)
     if not final_records:

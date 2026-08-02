@@ -14,6 +14,7 @@ from ubipred.context import centered_sequence_window  # noqa: E402
 from ubipred.external_benchmark import (  # noqa: E402
     ExternalSite,
     build_released_leakage_sets,
+    canonical_line_sha256,
     leakage_reasons,
     load_external_benchmark,
     parse_mmseqs_homology_hit,
@@ -121,6 +122,20 @@ class ExternalBenchmarkTests(unittest.TestCase):
         for line in invalid_lines:
             with self.subTest(line=line), self.assertRaises(ValueError):
                 parse_mmseqs_homology_hit(line)
+
+    def test_canonical_line_hash_ignores_alignment_order(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "first.tsv"
+            second = Path(directory) / "second.tsv"
+            first.write_text("Q1\tT1\nQ2\tT2\n", encoding="utf-8")
+            second.write_text("Q2\tT2\nQ1\tT1\n", encoding="utf-8")
+            self.assertEqual(
+                canonical_line_sha256(first), canonical_line_sha256(second)
+            )
+            second.write_text("Q2\tT3\nQ1\tT1\n", encoding="utf-8")
+            self.assertNotEqual(
+                canonical_line_sha256(first), canonical_line_sha256(second)
+            )
 
     def test_conservative_released_overlap_detection(self) -> None:
         released_window = centered_sequence_window(self.sequence, 51, 49)
