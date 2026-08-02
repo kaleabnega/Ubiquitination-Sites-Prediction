@@ -26,6 +26,10 @@ contains only mapping, homology, retained-site, unique-protein, and class-
 support counts; it contains no model predictions or performance metrics. Any
 subsequent feasibility amendment must be versioned before inference.
 
+The completed v2 feasibility audit retained 286 sites from 231 proteins (191
+negative and 95 positive). It did not freeze a cohort or generate predictions;
+the resulting pre-inference amendment is specified in v3.
+
 ## Cohort construction and evaluation
 
 All remaining procedures follow the v1 contract: current UniProt sequences

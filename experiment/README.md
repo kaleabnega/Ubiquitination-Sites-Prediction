@@ -239,19 +239,22 @@ MMseqs2 against PLMD training proteins at the frozen 30% global-identity and
 80% shorter-sequence coverage rule. The amended v2 command requests alignment
 backtraces before exporting identical-residue counts and fails closed if all
 reported identities are zero. The v1 construction was invalidated before any
-external inference and remains provenance only.
+external inference and remains provenance only. The corrected v2 audit retained
+286 sites from 231 proteins. Version 3 records that pre-inference feasibility
+amendment, pins its alignment hashes, and uses whole-protein cluster bootstrap
+intervals to account for correlated sites.
 
 The cohort builder writes a checksum-locked manifest before inference. The
 primary candidate is already fixed as the equal `0.5/0.5` probability average
 of the authors' exact H5 model and the frozen seven-epoch context model at
-threshold `0.5`. MCC is primary; paired stratified-bootstrap intervals and an
-exact McNemar accuracy test compare it with the exact paper model on identical
-sites.
+threshold `0.5`. MCC is primary; paired protein-cluster bootstrap intervals
+compare it with the exact paper model on identical sites. Site-level McNemar
+counts are retained as descriptive diagnostics only.
 
 [Open external dbPTM/PTMGPT2 validation in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb)
 
 See the frozen
-[`external-validation contract`](methods/external_dbptm_ptmgpt2_v2.md).
+[`external-validation contract`](methods/external_dbptm_ptmgpt2_v3.md).
 
 ## Layout
 

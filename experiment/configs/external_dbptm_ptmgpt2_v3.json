@@ -1,0 +1,71 @@
+{
+  "experiment_name": "external_dbptm_ptmgpt2_v3",
+  "source_benchmark": "replication/MMUbiPred/benchmark.csv",
+  "source_benchmark_sha256": "c303df3ab199b3aa3d4c754aa3cd255343740298c11b1c03f55b8f2c4474ab9f",
+  "cohort_protocol": {
+    "exclude_training_accessions": true,
+    "exclude_historical_test_accessions": true,
+    "exclude_exact_released_windows": true,
+    "homology_reference": "full UniProt proteins represented in the processed PLMD training split",
+    "maximum_sequence_identity": 0.3,
+    "minimum_shorter_sequence_coverage": 0.8,
+    "homology_tool": "MMseqs2",
+    "homology_search_minimum_local_identity": 0.0,
+    "homology_search_sensitivity": 7.5,
+    "homology_search_maximum_evalue": 0.001,
+    "require_alignment_backtrace": true,
+    "paper_window_size": 49,
+    "context_window_size": 257,
+    "minimum_mapping_fraction": 0.8,
+    "minimum_reference_sequence_fraction": 0.98,
+    "minimum_final_sites": 250,
+    "minimum_final_sites_per_class": 75
+  },
+  "feasibility_amendment": {
+    "basis": "v2 pre-inference feasibility audit; no model predictions generated",
+    "v2_raw_alignments_sha256": "25a90e9c62ea6ad4769ae12c363de506e30a7dc468e590c2e9b4fe7024431d38",
+    "v2_qualifying_alignments_sha256": "9bda418ee1ef2429bc7230ee80b58595f157440d083180f605c33962293c099d",
+    "prospective_sites": 286,
+    "prospective_negative_sites": 191,
+    "prospective_positive_sites": 95,
+    "prospective_unique_accessions": 231,
+    "amended_minimum_final_sites": 250,
+    "amended_minimum_final_sites_per_class": 75,
+    "external_predictions_inspected_before_amendment": false
+  },
+  "frozen_evaluation": {
+    "primary_candidate": "equal_probability_ensemble",
+    "comparators": [
+      "exact_released_mmubipred",
+      "frozen_seven_epoch_context_model"
+    ],
+    "fusion": "equal arithmetic mean of positive-class probabilities",
+    "paper_weight": 0.5,
+    "context_weight": 0.5,
+    "trained_fusion_parameters": false,
+    "primary_threshold": 0.5,
+    "primary_metric": "mcc",
+    "secondary_metrics": [
+      "accuracy",
+      "sensitivity",
+      "specificity",
+      "precision",
+      "f1",
+      "auroc",
+      "auprc"
+    ],
+    "bootstrap_replicates": 10000,
+    "bootstrap_seed": 20260731,
+    "bootstrap_unit": "canonical_accession",
+    "confidence_level": 0.95,
+    "historical_test_informed_architecture": true,
+    "external_labels_may_not_select_weights_or_threshold": true
+  },
+  "context_model": {
+    "config": "experiment/configs/mmubipred_context_residual_v1.json",
+    "experiment_name": "mmubipred_context_only_final_v1",
+    "refit_epochs": 7,
+    "architecture": "long_context_lora_esm2_v1"
+  },
+  "released_mmubipred_sha256": "a9393c05635f8019d08fe916885bdf3f31225859b2d0cb4130ec4c2bd89a5001"
+}

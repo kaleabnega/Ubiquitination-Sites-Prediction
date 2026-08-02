@@ -124,6 +124,23 @@ def main() -> None:
         or not bool(protocol.get("require_alignment_backtrace", False))
     ):
         raise ValueError("Cohort protocol differs from the frozen contract")
+    configured_amendment = config.get("feasibility_amendment")
+    if configured_amendment is not None and (
+        bool(
+            configured_amendment[
+                "external_predictions_inspected_before_amendment"
+            ]
+        )
+        or int(configured_amendment["amended_minimum_final_sites"])
+        != int(protocol["minimum_final_sites"])
+        or int(
+            configured_amendment[
+                "amended_minimum_final_sites_per_class"
+            ]
+        )
+        != int(protocol["minimum_final_sites_per_class"])
+    ):
+        raise ValueError("Feasibility amendment differs from the protocol")
 
     benchmark = load_external_benchmark(benchmark_path)
     external_sequences, external_metadata = load_sequence_cache(
@@ -363,6 +380,31 @@ def main() -> None:
             ),
         },
     }
+    amendment = config.get("feasibility_amendment")
+    if amendment is not None:
+        observed_amendment_basis = {
+            "v2_raw_alignments_sha256": feasibility["artifacts"][
+                "raw_alignments_sha256"
+            ],
+            "v2_qualifying_alignments_sha256": feasibility["artifacts"][
+                "qualifying_alignments_sha256"
+            ],
+            "prospective_sites": len(final_records),
+            "prospective_negative_sites": final_support["negative"],
+            "prospective_positive_sites": final_support["positive"],
+            "prospective_unique_accessions": feasibility[
+                "prospective_final_cohort"
+            ]["unique_accessions"],
+        }
+        expected_amendment_basis = {
+            key: amendment[key] for key in observed_amendment_basis
+        }
+        if observed_amendment_basis != expected_amendment_basis:
+            raise RuntimeError(
+                "Observed cohort differs from the frozen feasibility "
+                "amendment; refusing to freeze v3"
+            )
+        feasibility["feasibility_amendment_verified"] = True
     write_json(feasibility_path, feasibility)
     print(json.dumps(feasibility, indent=2, sort_keys=True), flush=True)
     if not final_records:
@@ -550,6 +592,7 @@ def main() -> None:
             ).hexdigest(),
         },
         "frozen_evaluation": config["frozen_evaluation"],
+        "feasibility_amendment": configured_amendment,
     }
     write_json(lock_path, lock)
     print(json.dumps(lock, indent=2, sort_keys=True))

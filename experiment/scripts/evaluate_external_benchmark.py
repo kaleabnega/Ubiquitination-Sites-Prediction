@@ -34,7 +34,7 @@ from ubipred.metrics import compute_metrics, write_json  # noqa: E402
 from ubipred.model import build_model  # noqa: E402
 from ubipred.paired_statistics import (  # noqa: E402
     mcnemar_exact,
-    paired_stratified_bootstrap,
+    paired_cluster_bootstrap,
 )
 
 
@@ -141,6 +141,7 @@ def main() -> None:
         or float(evaluation["paper_weight"]) != 0.5
         or float(evaluation["context_weight"]) != 0.5
         or float(evaluation["primary_threshold"]) != 0.5
+        or evaluation.get("bootstrap_unit") != "canonical_accession"
         or not bool(evaluation["external_labels_may_not_select_weights_or_threshold"])
     ):
         raise ValueError("Frozen external evaluation contract changed")
@@ -340,10 +341,14 @@ def main() -> None:
         labels, ensemble_probabilities, threshold
     )
 
-    bootstrap = paired_stratified_bootstrap(
+    canonical_accessions = np.asarray(
+        [row["canonical_accession"] for row in cohort]
+    )
+    bootstrap = paired_cluster_bootstrap(
         labels,
         ensemble_probabilities,
         paper_probabilities,
+        canonical_accessions,
         threshold=threshold,
         replicates=int(evaluation["bootstrap_replicates"]),
         seed=int(evaluation["bootstrap_seed"]),
@@ -375,12 +380,18 @@ def main() -> None:
         ),
         "paired_ensemble_vs_exact_mmubipred": {
             "bootstrap": bootstrap,
-            "mcnemar_accuracy": mcnemar_exact(
-                labels,
-                ensemble_probabilities,
-                paper_probabilities,
-                threshold,
-            ),
+            "mcnemar_accuracy_descriptive_site_level": {
+                **mcnemar_exact(
+                    labels,
+                    ensemble_probabilities,
+                    paper_probabilities,
+                    threshold,
+                ),
+                "inferential_role": (
+                    "descriptive only; protein-cluster bootstrap is the "
+                    "primary uncertainty analysis"
+                ),
+            },
         },
         "context_diagnostics": {
             "name": diagnostic_name,
@@ -401,6 +412,7 @@ def main() -> None:
             dtype=np.int64,
         ),
         labels=labels,
+        canonical_accessions=canonical_accessions,
         paper_probabilities=paper_probabilities,
         context_probabilities=context_probabilities,
         equal_ensemble_probabilities=ensemble_probabilities,
@@ -413,6 +425,8 @@ def main() -> None:
             [
                 "benchmark_index",
                 "identifier",
+                "canonical_accession",
+                "position_one_based",
                 "label",
                 "paper_probability",
                 "context_probability",
@@ -431,6 +445,8 @@ def main() -> None:
                 [
                     row["benchmark_index"],
                     row["identifier"],
+                    row["canonical_accession"],
+                    row["position_one_based"],
                     int(label),
                     float(paper),
                     float(context),

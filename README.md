@@ -169,19 +169,21 @@ shorter-sequence coverage. The corrected v2 search explicitly requests
 MMseqs2 alignment backtraces so its exported identical-residue counts are
 valid, and refuses to freeze a cohort if all such counts are zero. The v1
 cohort attempt was invalidated before model inference and is preserved only
-as provenance.
+as provenance. The corrected v2 feasibility audit retained 286 sites from 231
+proteins; v3 transparently lowers only the pre-inference feasibility guards
+and uses protein-cluster bootstrap intervals.
 
 The candidate was frozen before this external evaluation: it is the
 equal-weight probability average of the authors' exact H5 model and the
 seven-epoch context model, evaluated at threshold `0.5`. MCC is primary and
-10,000 paired stratified bootstrap replicates quantify candidate-minus-paper
-uncertainty. The notebook deliberately stops after writing the cohort lock;
-external inference requires a separate explicit acknowledgement.
+10,000 paired protein-cluster bootstrap replicates quantify candidate-minus-
+paper uncertainty. The notebook deliberately stops after writing the cohort
+lock; external inference requires a separate explicit acknowledgement.
 
 [Open the external dbPTM/PTMGPT2 validation notebook](experiment/notebooks/10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb)
 
 Read the frozen
-[external-validation contract](experiment/methods/external_dbptm_ptmgpt2_v2.md).
+[external-validation contract](experiment/methods/external_dbptm_ptmgpt2_v3.md).
 
 ## Repository layout
 

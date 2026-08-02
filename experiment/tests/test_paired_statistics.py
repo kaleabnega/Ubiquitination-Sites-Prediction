@@ -12,6 +12,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "experiment" / "src"))
 
 from ubipred.paired_statistics import (  # noqa: E402
     mcnemar_exact,
+    paired_cluster_bootstrap,
     paired_stratified_bootstrap,
 )
 
@@ -44,6 +45,26 @@ class PairedStatisticsTests(unittest.TestCase):
         self.assertEqual(result["candidate_only_correct"], 2)
         self.assertEqual(result["reference_only_correct"], 0)
         self.assertEqual(result["discordant_total"], 2)
+
+    def test_cluster_bootstrap_resamples_whole_proteins(self) -> None:
+        labels = np.asarray([0, 0, 1, 1, 0, 1])
+        probabilities = np.asarray([0.1, 0.2, 0.8, 0.9, 0.3, 0.7])
+        groups = np.asarray(["A", "A", "B", "B", "C", "D"])
+        result = paired_cluster_bootstrap(
+            labels,
+            probabilities,
+            probabilities,
+            groups,
+            threshold=0.5,
+            replicates=20,
+            seed=11,
+            confidence_level=0.95,
+        )
+        self.assertEqual(result["resampling_unit"], "canonical_accession")
+        self.assertEqual(result["unique_groups"], 4)
+        for metric in result["metrics"].values():
+            self.assertEqual(metric["difference"], 0.0)
+            self.assertEqual(metric["confidence_interval"], [0.0, 0.0])
 
 
 if __name__ == "__main__":
