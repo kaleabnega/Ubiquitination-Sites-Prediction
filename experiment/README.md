@@ -283,6 +283,21 @@ froze and passed review; neither model is retrained or tuned on this cohort.
 See the
 [`disjoint-holdout contract`](methods/external_dbptm_disjoint_holdout_v2.md).
 
+## Training-label noise audit
+
+Notebook 12 audits asymmetric label uncertainty before selecting a new loss.
+It uses no model predictions and does not access the released independent test.
+The deterministic report covers internal site/window contradictions,
+mixed-label proteins, proximity of negative sites to known positive sites, and
+bidirectional exact conflicts with the already-inspected official dbPTM
+source. Cross-database disagreement is evidence of annotation inconsistency,
+not proof of a definitive biological label.
+
+[Open the training-label noise audit in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/12_Training_Label_Noise_Audit_Colab.ipynb)
+
+See the
+[`label-noise audit contract`](methods/label_noise_audit_v1.md).
+
 ## Layout
 
 ```text

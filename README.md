@@ -213,6 +213,20 @@ section was added for the predeclared direct context-versus-MMUbiPred analysis.
 Read the
 [disjoint-holdout contract](experiment/methods/external_dbptm_disjoint_holdout_v2.md).
 
+## Training-label noise audit
+
+Notebook 12 performs a CPU-only, prediction-free audit before any robust-loss
+or positive–unlabeled experiment is selected. It measures contradictory
+training sites and windows, mixed-label protein structure, negative-site
+proximity to known positives, and exact conflicts between PLMD training labels
+and the already-inspected official dbPTM source. It does not access the
+released independent test or modify any labels.
+
+[Open the training-label noise audit notebook](experiment/notebooks/12_Training_Label_Noise_Audit_Colab.ipynb)
+
+Read the
+[label-noise audit contract](experiment/methods/label_noise_audit_v1.md).
+
 ## Repository layout
 
 ```text
@@ -264,6 +278,10 @@ The notebook:
 The separate external-validation workflow is:
 
 [10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb](experiment/notebooks/10_External_dbPTM_PTMGPT2_Validation_Colab.ipynb)
+
+The CPU-only label-noise audit workflow is:
+
+[12_Training_Label_Noise_Audit_Colab.ipynb](experiment/notebooks/12_Training_Label_Noise_Audit_Colab.ipynb)
 
 For this private repository, create a fine-grained GitHub token with read-only
 access, save it in Colab Secrets as `GITHUB_TOKEN`, and enable notebook access
