@@ -252,6 +252,18 @@ and cannot change the development recommendation.
 Read the
 [prediction-complementarity protocol](experiment/methods/prediction_complementarity_v1.md).
 
+The next controlled candidate is a structure-aware bounded residual on the
+long-context LoRA-ESM2 model. Phase 1 performs no training: it retrieves exact
+full-sequence AlphaFold DB metadata and candidate-site pLDDT for the validated
+training cohort, checks overall and class-specific coverage, and freezes the
+eligible-site artifact. Structural training is designed only if every
+predeclared coverage gate passes.
+
+[Open the structure-feasibility audit notebook](experiment/notebooks/15_Structure_Context_Feasibility_Audit_Colab.ipynb)
+
+Read the
+[structure-aware context residual protocol](experiment/methods/structure_context_residual_v1.md).
+
 ## Repository layout
 
 ```text

@@ -324,6 +324,19 @@ external predictions cannot change that recommendation.
 See the
 [`prediction-complementarity protocol`](methods/prediction_complementarity_v1.md).
 
+The remaining biologically orthogonal hypothesis is predicted local structure.
+Notebook 15 begins Phase 1 of a structure-aware context residual: it uses the
+official AlphaFold DB API to require an exact canonical full-sequence match and
+candidate-site pLDDT for every context-valid training record. Retrieval is
+Drive-backed, concurrent, and resumable. No model is trained, and no released
+or external test is accessed. The residual screen is implemented only if the
+frozen overall and per-class coverage gates pass.
+
+[Open the structure-feasibility audit in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/15_Structure_Context_Feasibility_Audit_Colab.ipynb)
+
+See the
+[`structure-aware context residual protocol`](methods/structure_context_residual_v1.md).
+
 ## Layout
 
 ```text

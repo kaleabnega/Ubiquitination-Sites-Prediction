@@ -1,0 +1,14 @@
+{
+  "experiment_name": "structure_context_feasibility_v1",
+  "data_dir": "replication/MMUbiPred",
+  "sequence_cache": "/content/drive/MyDrive/MMUbiPred-research/context/uniprot_training_sequences.json",
+  "output_dir": "/content/drive/MyDrive/MMUbiPred-research/structure/structure-context-feasibility-v1",
+  "context_window_size": 257,
+  "minimum_site_coverage": 0.95,
+  "minimum_positive_site_coverage": 0.95,
+  "minimum_negative_site_coverage": 0.95,
+  "high_confidence_plddt": 70.0,
+  "low_confidence_policy": "retain with explicit confidence and geometry-validity mask; do not discard labels based on pLDDT",
+  "training_if_feasible": "freeze the existing context branch first and cross-fit only a lightweight bounded structural residual",
+  "released_independent_or_external_test_access": false
+}
