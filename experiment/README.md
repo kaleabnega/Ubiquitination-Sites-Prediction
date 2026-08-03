@@ -309,6 +309,21 @@ predeclared gate can authorize only a three-seed development confirmation.
 See the
 [`robust-loss sensitivity protocol`](methods/robust_loss_sensitivity_v1.md).
 
+The completed screen retained BCE: neither negative smoothing nor generalized
+cross entropy improved both fixed development MCC and AUROC. Notebook 14 now
+performs a CPU-only complementarity diagnostic using the frozen corrected OOF
+predictions from notebook 09. It reports class- and fold-specific unique
+corrections, dependence, an explicitly non-deployable oracle ceiling, and the
+incremental value captured by the cross-fitted residual stack. A more flexible
+gate is considered only if the existing frozen development fusion decision
+shows material value over context alone. Optional saved historical and
+external predictions cannot change that recommendation.
+
+[Open the prediction-complementarity diagnostic in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/14_MMUbiPred_Context_Complementarity_Diagnostic_Colab.ipynb)
+
+See the
+[`prediction-complementarity protocol`](methods/prediction_complementarity_v1.md).
+
 ## Layout
 
 ```text

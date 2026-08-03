@@ -34,6 +34,7 @@ MMUbiPred.
 | Historical-test evaluation | CenterLoRA-ProtBERT v1 | MCC `0.54997`, seed 42 | Numerical gain of `0.00413`; inconclusive |
 | Candidate 5 | LoRA-ESM2 Hybrid v1 | Development MCC `0.57165`; historical-test MCC `0.53616` | Rejected |
 | Current architecture | Long-context LoRA-ESM2 candidate | OOF MCC `0.57901` | Advanced to frozen 7-epoch full-data refit |
+| Robust-loss sensitivity | Negative smoothing and GCE | Neither improved BCE development MCC or AUROC | Rejected; retain BCE |
 | External validation | dbPTM/PTMGPT2 benchmark | Cohort and inference protocol frozen | Awaiting leakage-audited cohort construction |
 
 Architecture-screen results above use protein-grouped development splits drawn
@@ -237,6 +238,19 @@ earns a three-seed confirmation; no test set is loaded.
 
 Read the
 [robust-loss sensitivity protocol](experiment/methods/robust_loss_sensitivity_v1.md).
+
+The screen returned `STOP_ROBUST_LOSS`. Negative smoothing reduced fixed MCC
+by `0.00583` and AUROC by `0.01222`; generalized cross entropy reduced fixed
+MCC by `0.00168` and AUROC by `0.00460`. The next CPU-only diagnostic uses the
+already saved corrected out-of-fold local, context, average, and residual-stack
+predictions to determine whether their complementary errors justify a gated
+fusion screen. Historical and external saved predictions are descriptive only
+and cannot change the development recommendation.
+
+[Open the prediction-complementarity diagnostic notebook](experiment/notebooks/14_MMUbiPred_Context_Complementarity_Diagnostic_Colab.ipynb)
+
+Read the
+[prediction-complementarity protocol](experiment/methods/prediction_complementarity_v1.md).
 
 ## Repository layout
 
