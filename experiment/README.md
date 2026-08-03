@@ -268,15 +268,19 @@ external source is an exact subset of the official archive, the new workflow
 excludes that entire source and filters homology against both it and PLMD.
 
 The context model is the frozen primary candidate, exact MMUbiPred is the
-comparator, and AUROC is the single primary endpoint. Before inference, the
-cohort must retain at least 750 sites, 200 sites per class, and 400 canonical
-proteins. Database-negative labels are explicitly treated as potentially noisy
-unannotated lysines rather than experimentally proven negatives.
+comparator, and AUROC is the single primary endpoint. The v1 pre-inference
+audit retained 740 sites (369 negative, 371 positive) from 477 proteins but
+missed its round-number 750-site gate by 10; no predictions were generated. A
+documented v2 amendment changes only the total minimum to 700 while retaining
+the 200-per-class and 400-protein gates and requiring exact reproduction of the
+preserved v1 audit. Database-negative labels are explicitly treated as
+potentially noisy unannotated lysines rather than experimentally proven
+negatives.
 
 [Open disjoint dbPTM holdout construction in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/11_Disjoint_dbPTM_Holdout_v1_Colab.ipynb)
 
 See the
-[`disjoint-holdout contract`](methods/external_dbptm_disjoint_holdout_v1.md).
+[`disjoint-holdout contract`](methods/external_dbptm_disjoint_holdout_v2.md).
 
 ## Layout
 

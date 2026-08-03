@@ -1,5 +1,11 @@
 # Disjoint dbPTM holdout v1
 
+> **Outcome:** The pre-inference audit retained 740 sites (369 negative, 371
+> positive) from 477 canonical proteins. This passed the class and protein
+> gates but missed the 750-site gate by 10. No cohort was frozen and no model
+> prediction was generated. The documented pre-inference amendment is defined
+> in [`external_dbptm_disjoint_holdout_v2.md`](external_dbptm_disjoint_holdout_v2.md).
+
 ## Purpose and hypothesis
 
 This study tests the prior external observation that the frozen seven-epoch

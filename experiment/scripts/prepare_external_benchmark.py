@@ -157,6 +157,13 @@ def main() -> None:
             ]
         )
         != int(protocol["minimum_final_sites_per_class"])
+        or int(
+            configured_amendment.get(
+                "amended_minimum_final_unique_accessions",
+                protocol.get("minimum_final_unique_accessions", 1),
+            )
+        )
+        != int(protocol.get("minimum_final_unique_accessions", 1))
     ):
         raise ValueError("Feasibility amendment differs from the protocol")
 
@@ -519,16 +526,29 @@ def main() -> None:
         for reference_path in (reference_raw, reference_qualifying):
             if not reference_path.exists():
                 raise FileNotFoundError(
-                    f"Missing v2 feasibility artifact: {reference_path}"
+                    f"Missing reference feasibility artifact: {reference_path}"
                 )
+        expected_reference_raw_hash = amendment.get(
+            "reference_raw_alignments_sha256",
+            amendment.get("v2_raw_alignments_sha256"),
+        )
+        expected_reference_qualifying_hash = amendment.get(
+            "reference_qualifying_alignments_sha256",
+            amendment.get("v2_qualifying_alignments_sha256"),
+        )
+        if not isinstance(expected_reference_raw_hash, str) or not isinstance(
+            expected_reference_qualifying_hash, str
+        ):
+            raise ValueError(
+                "Feasibility amendment lacks reference alignment hashes"
+            )
         if (
-            sha256_file(reference_raw)
-            != amendment["v2_raw_alignments_sha256"]
+            sha256_file(reference_raw) != expected_reference_raw_hash
             or sha256_file(reference_qualifying)
-            != amendment["v2_qualifying_alignments_sha256"]
+            != expected_reference_qualifying_hash
         ):
             raise RuntimeError(
-                "The preserved v2 feasibility artifacts changed"
+                "The preserved reference feasibility artifacts changed"
             )
         reference_canonical_hashes = {
             "raw_alignments": canonical_line_sha256(reference_raw),
@@ -544,7 +564,7 @@ def main() -> None:
         }
         if observed_canonical_hashes != reference_canonical_hashes:
             raise RuntimeError(
-                "V3 alignment content differs from the preserved v2 "
+                "Alignment content differs from the preserved reference "
                 "feasibility audit; refusing to freeze"
             )
         observed_amendment_basis = {
@@ -561,16 +581,16 @@ def main() -> None:
         if observed_amendment_basis != expected_amendment_basis:
             raise RuntimeError(
                 "Observed cohort differs from the frozen feasibility "
-                "amendment; refusing to freeze v3"
+                "amendment; refusing to freeze"
             )
         feasibility["feasibility_amendment_verification"] = {
             "verified": True,
             "reference_directory": str(feasibility_reference_dir),
-            "reference_byte_hashes_match_v2": True,
+            "reference_byte_hashes_match": True,
             "order_independent_alignment_hashes": (
                 observed_canonical_hashes
             ),
-            "prospective_counts_match_v2": True,
+            "prospective_counts_match": True,
         }
     write_json(feasibility_path, feasibility)
     print(json.dumps(feasibility, indent=2, sort_keys=True), flush=True)

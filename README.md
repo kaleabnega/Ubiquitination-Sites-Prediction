@@ -199,15 +199,18 @@ validation, exact-overlap filtering, and the 30% identity/80% shorter-coverage
 rule all occur before prediction.
 
 The frozen, prior-informed hypothesis compares the seven-epoch context model
-directly with exact MMUbiPred using AUROC as the single primary metric. Cohort
-construction requires at least 750 sites, 200 per class, and 400 proteins. The
-notebook intentionally ends at the cohort audit; inference will only be added
-after feasibility passes.
+directly with exact MMUbiPred using AUROC as the single primary metric. The v1
+pre-inference audit retained 740 sites (369 negative, 371 positive) from 477
+proteins and generated no predictions. A documented v2 feasibility amendment
+changes only the round-number total gate from 750 to 700; the 200-per-class and
+400-protein gates, cohort filters, models, hypothesis, and statistics remain
+unchanged. The notebook verifies the preserved v1 alignments and exact counts
+before freezing v2 and still intentionally ends before inference.
 
 [Open the disjoint dbPTM holdout notebook](experiment/notebooks/11_Disjoint_dbPTM_Holdout_v1_Colab.ipynb)
 
 Read the
-[disjoint-holdout contract](experiment/methods/external_dbptm_disjoint_holdout_v1.md).
+[disjoint-holdout contract](experiment/methods/external_dbptm_disjoint_holdout_v2.md).
 
 ## Repository layout
 

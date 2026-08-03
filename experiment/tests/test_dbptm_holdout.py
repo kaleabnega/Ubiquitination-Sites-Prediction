@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -17,6 +18,34 @@ from normalize_dbptm_benchmark import (  # noqa: E402
 
 
 class DbptmHoldoutTests(unittest.TestCase):
+    def test_v2_is_a_pinned_pre_inference_feasibility_amendment(self) -> None:
+        config_path = (
+            PROJECT_ROOT
+            / "experiment"
+            / "configs"
+            / "external_dbptm_disjoint_holdout_v2.json"
+        )
+        config = json.loads(config_path.read_text())
+        protocol = config["cohort_protocol"]
+        amendment = config["feasibility_amendment"]
+
+        self.assertEqual(protocol["minimum_final_sites"], 700)
+        self.assertEqual(protocol["minimum_final_sites_per_class"], 200)
+        self.assertEqual(
+            protocol["minimum_final_unique_accessions"], 400
+        )
+        self.assertEqual(amendment["prospective_sites"], 740)
+        self.assertEqual(amendment["prospective_negative_sites"], 369)
+        self.assertEqual(amendment["prospective_positive_sites"], 371)
+        self.assertEqual(amendment["prospective_unique_accessions"], 477)
+        self.assertFalse(
+            amendment["external_predictions_inspected_before_amendment"]
+        )
+        self.assertEqual(
+            amendment["amended_minimum_final_unique_accessions"],
+            protocol["minimum_final_unique_accessions"],
+        )
+
     def test_fasta_parser_and_normalization_are_fail_closed(self) -> None:
         text = (
             ">P12345_HUMAN_11\r\nAAAAAAAAAAKAAAAAAAAAA\r\n"
