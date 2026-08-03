@@ -205,7 +205,8 @@ proteins and generated no predictions. A documented v2 feasibility amendment
 changes only the round-number total gate from 750 to 700; the 200-per-class and
 400-protein gates, cohort filters, models, hypothesis, and statistics remain
 unchanged. The notebook verifies the preserved v1 alignments and exact counts
-before freezing v2 and still intentionally ends before inference.
+before freezing v2. After that audit passed review, a one-time frozen inference
+section was added for the predeclared direct context-versus-MMUbiPred analysis.
 
 [Open the disjoint dbPTM holdout notebook](experiment/notebooks/11_Disjoint_dbPTM_Holdout_v1_Colab.ipynb)
 

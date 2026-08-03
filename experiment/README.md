@@ -275,7 +275,8 @@ documented v2 amendment changes only the total minimum to 700 while retaining
 the 200-per-class and 400-protein gates and requiring exact reproduction of the
 preserved v1 audit. Database-negative labels are explicitly treated as
 potentially noisy unannotated lysines rather than experimentally proven
-negatives.
+negatives. The one-time inference section was added only after the v2 cohort
+froze and passed review; neither model is retrained or tuned on this cohort.
 
 [Open disjoint dbPTM holdout construction in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/11_Disjoint_dbPTM_Holdout_v1_Colab.ipynb)
 

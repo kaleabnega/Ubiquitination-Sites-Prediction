@@ -46,6 +46,28 @@ class DbptmHoldoutTests(unittest.TestCase):
             protocol["minimum_final_unique_accessions"],
         )
 
+    def test_v2_notebook_runs_only_the_frozen_direct_comparison(self) -> None:
+        notebook_path = (
+            PROJECT_ROOT
+            / "experiment"
+            / "notebooks"
+            / "11_Disjoint_dbPTM_Holdout_v1_Colab.ipynb"
+        )
+        notebook = json.loads(notebook_path.read_text())
+        sources = {
+            cell.get("id"): "".join(cell.get("source", []))
+            for cell in notebook["cells"]
+        }
+        self.assertIn(
+            "external_dbptm_disjoint_holdout_v2.json", sources["paths"]
+        )
+        self.assertIn(
+            "evaluate_external_benchmark.py", sources["inference"]
+        )
+        self.assertIn("--allow-external-test", sources["inference"])
+        self.assertNotIn("train.py", sources["inference"])
+        self.assertNotIn("fit(", sources["inference"])
+
     def test_fasta_parser_and_normalization_are_fail_closed(self) -> None:
         text = (
             ">P12345_HUMAN_11\r\nAAAAAAAAAAKAAAAAAAAAA\r\n"

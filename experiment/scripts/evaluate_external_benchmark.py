@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-time evaluation of frozen models on the external dbPTM benchmark."""
+"""One-time evaluation of frozen models on a locked external benchmark."""
 
 from __future__ import annotations
 
@@ -135,15 +135,40 @@ def main() -> None:
 
     config = json.loads(config_path.read_text(encoding="utf-8"))
     evaluation = dict(config["frozen_evaluation"])
-    if (
-        evaluation["fusion"]
-        != "equal arithmetic mean of positive-class probabilities"
-        or float(evaluation["paper_weight"]) != 0.5
-        or float(evaluation["context_weight"]) != 0.5
-        or float(evaluation["primary_threshold"]) != 0.5
+    direct_context_comparison = (
+        evaluation.get("primary_candidate")
+        == "frozen_seven_epoch_context_model"
+    )
+    common_contract_changed = (
+        float(evaluation["primary_threshold"]) != 0.5
         or evaluation.get("bootstrap_unit") != "canonical_accession"
-        or not bool(evaluation["external_labels_may_not_select_weights_or_threshold"])
-    ):
+    )
+    if direct_context_comparison:
+        contract_changed = (
+            common_contract_changed
+            or evaluation.get("primary_comparator")
+            != "exact_released_mmubipred"
+            or evaluation.get("primary_metric") != "auroc"
+            or not bool(
+                evaluation[
+                    "external_labels_may_not_select_model_or_threshold"
+                ]
+            )
+        )
+    else:
+        contract_changed = (
+            common_contract_changed
+            or evaluation["fusion"]
+            != "equal arithmetic mean of positive-class probabilities"
+            or float(evaluation["paper_weight"]) != 0.5
+            or float(evaluation["context_weight"]) != 0.5
+            or not bool(
+                evaluation[
+                    "external_labels_may_not_select_weights_or_threshold"
+                ]
+            )
+        )
+    if contract_changed:
         raise ValueError("Frozen external evaluation contract changed")
 
     lock_path = cohort_dir / "cohort_lock.json"
@@ -327,9 +352,6 @@ def main() -> None:
     paper_probabilities = np.asarray(
         paper_outputs[:, 1], dtype=np.float64
     )
-    ensemble_probabilities = equal_probability_average(
-        [paper_probabilities, context_probabilities]
-    )
     threshold = float(evaluation["primary_threshold"])
     paper_metrics = compute_metrics(
         labels, paper_probabilities, threshold
@@ -337,16 +359,23 @@ def main() -> None:
     context_metrics = compute_metrics(
         labels, context_probabilities, threshold
     )
-    ensemble_metrics = compute_metrics(
-        labels, ensemble_probabilities, threshold
-    )
+    if direct_context_comparison:
+        candidate_probabilities = context_probabilities
+        candidate_metrics = context_metrics
+    else:
+        candidate_probabilities = equal_probability_average(
+            [paper_probabilities, context_probabilities]
+        )
+        candidate_metrics = compute_metrics(
+            labels, candidate_probabilities, threshold
+        )
 
     canonical_accessions = np.asarray(
         [row["canonical_accession"] for row in cohort]
     )
     bootstrap = paired_cluster_bootstrap(
         labels,
-        ensemble_probabilities,
+        candidate_probabilities,
         paper_probabilities,
         canonical_accessions,
         threshold=threshold,
@@ -355,35 +384,40 @@ def main() -> None:
         confidence_level=float(evaluation["confidence_level"]),
         progress_every=500,
     )
+    primary_metric = str(evaluation["primary_metric"])
+    primary_bootstrap_result = bootstrap["metrics"][primary_metric]
+    primary_success = (
+        float(primary_bootstrap_result["confidence_interval"][0]) > 0.0
+    )
     results = {
-        "status": "frozen external dbPTM/PTMGPT2 evaluation completed",
+        "status": "frozen external evaluation completed",
         "comparison_valid": True,
-        "external_validation_claim_allowed": True,
+        "confirmatory_evaluation": direct_context_comparison,
+        "confirmatory_primary_claim_supported": primary_success,
         "historical_test_informed_architecture": True,
         "external_labels_used_for_model_or_threshold_selection": False,
         "cohort": lock["final_cohort"],
         "architecture": {
             "primary_candidate": evaluation["primary_candidate"],
-            "fusion": evaluation["fusion"],
-            "paper_weight": 0.5,
-            "context_weight": 0.5,
             "threshold": threshold,
+        },
+        "primary_hypothesis": {
+            "metric": primary_metric,
+            "success_rule": evaluation.get("primary_success_rule"),
+            "result": primary_bootstrap_result,
+            "success_criterion_met": primary_success,
         },
         "exact_released_mmubipred": paper_metrics,
         "frozen_context_model": context_metrics,
-        "equal_probability_ensemble": ensemble_metrics,
-        "ensemble_minus_exact_mmubipred": metric_differences(
-            ensemble_metrics, paper_metrics
+        "primary_candidate_minus_exact_mmubipred": metric_differences(
+            candidate_metrics, paper_metrics
         ),
-        "ensemble_minus_context": metric_differences(
-            ensemble_metrics, context_metrics
-        ),
-        "paired_ensemble_vs_exact_mmubipred": {
+        "paired_primary_candidate_vs_exact_mmubipred": {
             "bootstrap": bootstrap,
             "mcnemar_accuracy_descriptive_site_level": {
                 **mcnemar_exact(
                     labels,
-                    ensemble_probabilities,
+                    candidate_probabilities,
                     paper_probabilities,
                     threshold,
                 ),
@@ -405,55 +439,81 @@ def main() -> None:
             ),
         },
     }
-    np.savez_compressed(
-        predictions_path,
-        benchmark_indices=np.asarray(
+    prediction_arrays = {
+        "benchmark_indices": np.asarray(
             [int(row["benchmark_index"]) for row in cohort],
             dtype=np.int64,
         ),
-        labels=labels,
-        canonical_accessions=canonical_accessions,
-        paper_probabilities=paper_probabilities,
-        context_probabilities=context_probabilities,
-        equal_ensemble_probabilities=ensemble_probabilities,
-    )
+        "labels": labels,
+        "canonical_accessions": canonical_accessions,
+        "paper_probabilities": paper_probabilities,
+        "context_probabilities": context_probabilities,
+    }
+    if not direct_context_comparison:
+        results["architecture"].update(
+            {
+                "fusion": evaluation["fusion"],
+                "paper_weight": 0.5,
+                "context_weight": 0.5,
+            }
+        )
+        results.update(
+            {
+                "equal_probability_ensemble": candidate_metrics,
+                "ensemble_minus_exact_mmubipred": metric_differences(
+                    candidate_metrics, paper_metrics
+                ),
+                "ensemble_minus_context": metric_differences(
+                    candidate_metrics, context_metrics
+                ),
+                "paired_ensemble_vs_exact_mmubipred": results[
+                    "paired_primary_candidate_vs_exact_mmubipred"
+                ],
+            }
+        )
+        prediction_arrays["equal_ensemble_probabilities"] = (
+            candidate_probabilities
+        )
+    np.savez_compressed(predictions_path, **prediction_arrays)
     with predictions_table_path.open(
         "w", encoding="utf-8", newline=""
     ) as handle:
         writer = csv.writer(handle, delimiter="\t")
-        writer.writerow(
-            [
-                "benchmark_index",
-                "identifier",
-                "canonical_accession",
-                "position_one_based",
-                "label",
-                "paper_probability",
-                "context_probability",
-                "ensemble_probability",
-                "ensemble_prediction_at_0.5",
-            ]
-        )
-        for row, label, paper, context, ensemble in zip(
+        header = [
+            "benchmark_index",
+            "identifier",
+            "canonical_accession",
+            "position_one_based",
+            "label",
+            "paper_probability",
+            "context_probability",
+        ]
+        if not direct_context_comparison:
+            header.extend(
+                ["ensemble_probability", "ensemble_prediction_at_0.5"]
+            )
+        writer.writerow(header)
+        for row, label, paper, context, candidate in zip(
             cohort,
             labels,
             paper_probabilities,
             context_probabilities,
-            ensemble_probabilities,
+            candidate_probabilities,
         ):
-            writer.writerow(
-                [
-                    row["benchmark_index"],
-                    row["identifier"],
-                    row["canonical_accession"],
-                    row["position_one_based"],
-                    int(label),
-                    float(paper),
-                    float(context),
-                    float(ensemble),
-                    int(ensemble >= threshold),
-                ]
-            )
+            output_row = [
+                row["benchmark_index"],
+                row["identifier"],
+                row["canonical_accession"],
+                row["position_one_based"],
+                int(label),
+                float(paper),
+                float(context),
+            ]
+            if not direct_context_comparison:
+                output_row.extend(
+                    [float(candidate), int(candidate >= threshold)]
+                )
+            writer.writerow(output_row)
     manifest = {
         "status": "external evaluation completed exactly once",
         "evaluated_at_utc": datetime.now(timezone.utc).isoformat(),

@@ -26,6 +26,11 @@ alignment artifacts:
 The builder must reproduce the same order-independent alignment content and
 the same prospective cohort counts before v2 may freeze the cohort.
 
+The v2 construction subsequently reproduced the pinned content and froze 740
+sites from 477 proteins. Only after that pre-inference audit was reviewed was
+the one-time inference stage authorized. No model, threshold, or hypothesis
+was changed between cohort freeze and inference authorization.
+
 ## Purpose and hypothesis
 
 This study tests the prior external observation that the frozen seven-epoch
