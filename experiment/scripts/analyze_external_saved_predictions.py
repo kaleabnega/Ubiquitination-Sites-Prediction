@@ -16,6 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "experiment" / "src"))
 
 from ubipred.external_benchmark import sha256_file  # noqa: E402
+from ubipred.ensemble import equal_probability_average  # noqa: E402
 from ubipred.metrics import compute_metrics, write_json  # noqa: E402
 from ubipred.paired_statistics import (  # noqa: E402
     mcnemar_exact,
@@ -125,9 +126,33 @@ def main() -> None:
     if context_metrics != primary_results["frozen_context_model"]:
         raise ValueError("Recomputed context metrics differ from saved results")
 
+    direct_context_was_primary = (
+        evaluation.get("primary_candidate")
+        == "frozen_seven_epoch_context_model"
+    )
+    if direct_context_was_primary:
+        candidate_name = "equal_probability_mmubipred_context_hybrid"
+        candidate_probabilities = equal_probability_average(
+            [paper_probabilities, context_probabilities]
+        )
+        analysis_role = (
+            "post-primary exploratory evaluation of the previously defined "
+            "50/50 MMUbiPred-context hybrid; it cannot rescue or replace "
+            "the failed confirmatory context-versus-MMUbiPred hypothesis"
+        )
+    else:
+        candidate_name = "frozen_context_model"
+        candidate_probabilities = context_probabilities
+        analysis_role = (
+            "predeclared secondary comparator; does not replace the primary "
+            "equal-ensemble comparison"
+        )
+    candidate_metrics = compute_metrics(
+        labels, candidate_probabilities, threshold
+    )
     bootstrap = paired_cluster_bootstrap(
         labels,
-        context_probabilities,
+        candidate_probabilities,
         paper_probabilities,
         accessions,
         threshold=threshold,
@@ -136,14 +161,28 @@ def main() -> None:
         confidence_level=float(evaluation["confidence_level"]),
         progress_every=500,
     )
+    paired_comparison = {
+        "bootstrap": bootstrap,
+        "mcnemar_accuracy_descriptive_site_level": {
+            **mcnemar_exact(
+                labels,
+                candidate_probabilities,
+                paper_probabilities,
+                threshold,
+            ),
+            "inferential_role": (
+                "descriptive only; protein-cluster bootstrap is the "
+                "uncertainty analysis"
+            ),
+        },
+    }
     result = {
         "status": "saved-prediction secondary comparison completed",
         "new_model_inference_performed": False,
         "comparison_valid": True,
-        "analysis_role": (
-            "predeclared secondary comparator; does not replace the primary "
-            "equal-ensemble comparison"
-        ),
+        "analysis_role": analysis_role,
+        "post_primary_exploratory": direct_context_was_primary,
+        "confirmatory_claim_allowed": False,
         "multiplicity_note": (
             "intervals and p-values are unadjusted secondary analyses and "
             "must not be presented as a rescued primary claim"
@@ -153,24 +192,12 @@ def main() -> None:
         "unique_protein_groups": len(np.unique(accessions)),
         "exact_released_mmubipred": paper_metrics,
         "frozen_context_model": context_metrics,
-        "context_minus_exact_mmubipred": metric_differences(
-            context_metrics, paper_metrics
+        "secondary_candidate": candidate_name,
+        "secondary_candidate_metrics": candidate_metrics,
+        "secondary_candidate_minus_exact_mmubipred": metric_differences(
+            candidate_metrics, paper_metrics
         ),
-        "paired_context_vs_exact_mmubipred": {
-            "bootstrap": bootstrap,
-            "mcnemar_accuracy_descriptive_site_level": {
-                **mcnemar_exact(
-                    labels,
-                    context_probabilities,
-                    paper_probabilities,
-                    threshold,
-                ),
-                "inferential_role": (
-                    "descriptive only; protein-cluster bootstrap is the "
-                    "primary uncertainty analysis"
-                ),
-            },
-        },
+        "paired_secondary_candidate_vs_exact_mmubipred": paired_comparison,
         "source_artifacts": {
             "config_sha256": sha256_file(config_path),
             "cohort_lock_sha256": sha256_file(lock_path),
@@ -180,6 +207,35 @@ def main() -> None:
             "manifest_sha256": sha256_file(manifest_path),
         },
     }
+    if direct_context_was_primary:
+        result.update(
+            {
+                "hybrid_architecture": {
+                    "fusion": (
+                        "equal arithmetic mean of positive-class "
+                        "probabilities"
+                    ),
+                    "paper_weight": 0.5,
+                    "context_weight": 0.5,
+                    "trained_fusion_parameters": False,
+                    "weights_or_threshold_tuned_on_this_cohort": False,
+                },
+                "equal_probability_hybrid": candidate_metrics,
+                "hybrid_minus_exact_mmubipred": metric_differences(
+                    candidate_metrics, paper_metrics
+                ),
+                "paired_hybrid_vs_exact_mmubipred": paired_comparison,
+            }
+        )
+    else:
+        result.update(
+            {
+                "context_minus_exact_mmubipred": metric_differences(
+                    context_metrics, paper_metrics
+                ),
+                "paired_context_vs_exact_mmubipred": paired_comparison,
+            }
+        )
     write_json(output_path, result)
     print(json.dumps(result, indent=2, sort_keys=True))
 

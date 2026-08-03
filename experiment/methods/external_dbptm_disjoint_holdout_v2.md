@@ -77,3 +77,13 @@ canonical-protein groups to preserve within-protein dependence. Ten thousand
 replicates use seed 20260803. There is no threshold tuning. The primary
 context-versus-exact-MMUbiPred comparison, primary AUROC endpoint, and success
 rule are unchanged from v1. The earlier ensemble is not a primary candidate.
+
+## Post-primary exploratory analysis
+
+The confirmatory primary comparison was completed before evaluating the
+previously defined equal-probability MMUbiPred-context hybrid. The saved paper
+and context probabilities are averaged with fixed weights `0.5/0.5`; neither
+weight nor threshold is searched, and no neural-network inference is repeated.
+This hybrid comparison is explicitly post-primary and exploratory. Its metric
+differences, bootstrap intervals, and p-values cannot replace or rescue the
+failed confirmatory context-versus-MMUbiPred claim.

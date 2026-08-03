@@ -67,6 +67,15 @@ class DbptmHoldoutTests(unittest.TestCase):
         self.assertIn("--allow-external-test", sources["inference"])
         self.assertNotIn("train.py", sources["inference"])
         self.assertNotIn("fit(", sources["inference"])
+        self.assertIn(
+            "analyze_external_saved_predictions.py",
+            sources["hybrid-exploratory"],
+        )
+        self.assertIn(
+            "post-primary exploratory",
+            sources["hybrid-exploratory-title"].lower(),
+        )
+        self.assertNotIn("train.py", sources["hybrid-exploratory"])
 
     def test_fasta_parser_and_normalization_are_fail_closed(self) -> None:
         text = (
