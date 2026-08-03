@@ -218,6 +218,9 @@ def main() -> None:
     reference_model = str(suite["reference_model"])
     seeds = [int(seed) for seed in suite["seeds"]]
     models = list(suite["models"])
+    resume_incomplete = bool(
+        suite.get("resume_incomplete_development", False)
+    )
     output_root = (
         resolve_project_path(args.output_root)
         if args.output_root is not None
@@ -244,19 +247,27 @@ def main() -> None:
                 print(f"resume model={model_name} seed={seed}", flush=True)
             else:
                 print(f"run model={model_name} seed={seed}", flush=True)
+                command = [
+                    sys.executable,
+                    "-u",
+                    str(
+                        PROJECT_ROOT
+                        / "experiment"
+                        / "scripts"
+                        / "train.py"
+                    ),
+                    "--config",
+                    str(config_path),
+                    "--seed",
+                    str(seed),
+                    "--output-dir",
+                    str(output_dir),
+                    "--development-only",
+                ]
+                if args.resume and resume_incomplete:
+                    command.append("--resume-development")
                 subprocess.run(
-                    [
-                        sys.executable,
-                        "-u",
-                        str(PROJECT_ROOT / "experiment" / "scripts" / "train.py"),
-                        "--config",
-                        str(config_path),
-                        "--seed",
-                        str(seed),
-                        "--output-dir",
-                        str(output_dir),
-                        "--development-only",
-                    ],
+                    command,
                     cwd=PROJECT_ROOT,
                     check=True,
                 )

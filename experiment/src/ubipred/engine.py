@@ -11,6 +11,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
+from .losses import build_binary_loss
 from .metrics import compute_metrics, select_mcc_threshold, write_json
 
 
@@ -167,6 +168,7 @@ def train_model(
     use_amp: bool,
     checkpoint_metadata: dict[str, object],
     resume: bool = False,
+    loss_config: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if gradient_clip_norm is not None and gradient_clip_norm <= 0:
         raise ValueError("gradient_clip_norm must be positive or None")
@@ -188,7 +190,7 @@ def train_model(
         weight_decay=weight_decay,
         epsilon=optimizer_epsilon,
     )
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = build_binary_loss(loss_config)
     amp_enabled = bool(use_amp and device.type == "cuda")
     scaler = torch.amp.GradScaler(device.type, enabled=amp_enabled)
 
@@ -394,6 +396,7 @@ def refit_model(
     compact_checkpoint: bool = False,
     resume_source_path: str | Path | None = None,
     resume_source_metadata: dict[str, object] | None = None,
+    loss_config: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Refit a fresh model on every released training sample.
 
@@ -430,7 +433,7 @@ def refit_model(
         weight_decay=weight_decay,
         epsilon=optimizer_epsilon,
     )
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = build_binary_loss(loss_config)
     amp_enabled = bool(use_amp and device.type == "cuda")
     scaler = torch.amp.GradScaler(device.type, enabled=amp_enabled)
     history: list[dict[str, object]] = []

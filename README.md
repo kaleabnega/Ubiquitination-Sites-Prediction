@@ -227,6 +227,17 @@ released independent test or modify any labels.
 Read the
 [label-noise audit contract](experiment/methods/label_noise_audit_v1.md).
 
+The follow-up development-only sensitivity screen holds the
+MMUbiPred-compatible architecture and training protocol fixed while comparing
+BCE, asymmetric negative-label smoothing at `0.05`, and generalized cross
+entropy at `q=0.7`. A predeclared rule determines whether either robust loss
+earns a three-seed confirmation; no test set is loaded.
+
+[Open the robust-loss sensitivity notebook](experiment/notebooks/13_MMUbiPred_Robust_Loss_Sensitivity_Colab.ipynb)
+
+Read the
+[robust-loss sensitivity protocol](experiment/methods/robust_loss_sensitivity_v1.md).
+
 ## Repository layout
 
 ```text
@@ -282,6 +293,10 @@ The separate external-validation workflow is:
 The CPU-only label-noise audit workflow is:
 
 [12_Training_Label_Noise_Audit_Colab.ipynb](experiment/notebooks/12_Training_Label_Noise_Audit_Colab.ipynb)
+
+The paired robust-loss development screen is:
+
+[13_MMUbiPred_Robust_Loss_Sensitivity_Colab.ipynb](experiment/notebooks/13_MMUbiPred_Robust_Loss_Sensitivity_Colab.ipynb)
 
 For this private repository, create a fine-grained GitHub token with read-only
 access, save it in Colab Secrets as `GITHUB_TOKEN`, and enable notebook access

@@ -298,6 +298,17 @@ not proof of a definitive biological label.
 See the
 [`label-noise audit contract`](methods/label_noise_audit_v1.md).
 
+The follow-up sensitivity screen changes only the binary objective of the
+MMUbiPred-compatible model. BCE is paired against one conservative asymmetric
+negative-smoothing condition and one fixed generalized-cross-entropy
+condition on the same seed-42 protein-grouped development split. The
+predeclared gate can authorize only a three-seed development confirmation.
+
+[Open the robust-loss sensitivity screen in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/13_MMUbiPred_Robust_Loss_Sensitivity_Colab.ipynb)
+
+See the
+[`robust-loss sensitivity protocol`](methods/robust_loss_sensitivity_v1.md).
+
 ## Layout
 
 ```text

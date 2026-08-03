@@ -1,0 +1,27 @@
+{
+  "experiment_name": "mmubipred_robust_negative_smoothing_v1",
+  "data_dir": "replication/MMUbiPred",
+  "output_dir": "experiment/outputs/mmubipred_robust_negative_smoothing_v1_seed42",
+  "seed": 42,
+  "window_size": 49,
+  "validation_fraction": 0.1,
+  "split_strategy": "protein_grouped",
+  "batch_size": 32,
+  "num_workers": 0,
+  "epochs": 15,
+  "early_stopping_patience": 15,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0,
+  "optimizer": "adam",
+  "optimizer_epsilon": 1e-7,
+  "gradient_clip_norm": null,
+  "use_amp": false,
+  "loss": {
+    "name": "asymmetric_negative_label_smoothing",
+    "negative_target": 0.05
+  },
+  "model": {
+    "architecture": "mmubipred_compatible",
+    "l1_coefficient": 0.0001
+  }
+}

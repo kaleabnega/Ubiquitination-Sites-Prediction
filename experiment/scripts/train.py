@@ -211,6 +211,7 @@ def main() -> None:
         "branch_diagnostic_name": str(
             getattr(model, "diagnostic_name", "branch_diagnostics")
         ),
+        "loss": dict(config.get("loss", {"name": "bce"})),
     }
     gradient_clip_value = config.get("gradient_clip_norm", 1.0)
     gradient_clip_norm = (
@@ -235,6 +236,7 @@ def main() -> None:
         use_amp=bool(config["use_amp"]),
         checkpoint_metadata=checkpoint_metadata,
         resume=args.resume_development,
+        loss_config=dict(config.get("loss", {"name": "bce"})),
     )
 
     labels, probabilities, indices, branch_diagnostics = predict(
@@ -330,6 +332,7 @@ def main() -> None:
         use_amp=bool(config["use_amp"]),
         validation_selected_threshold=selected_threshold,
         checkpoint_metadata=checkpoint_metadata,
+        loss_config=dict(config.get("loss", {"name": "bce"})),
     )
     training_summary = {
         "development_selection": development_summary,
