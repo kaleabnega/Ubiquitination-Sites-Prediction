@@ -99,6 +99,7 @@ def main() -> None:
     reason_by_label = {0: Counter(), 1: Counter()}
     score_by_label: dict[int, list[float]] = {0: [], 1: []}
     category_counts: Counter[str] = Counter()
+    resolution_methods_by_site: Counter[str] = Counter()
     eligible_indices: list[int] = []
     eligible_labels: list[int] = []
     accessions: list[str] = []
@@ -151,6 +152,9 @@ def main() -> None:
         positions.append(position)
         site_plddt.append(score)
         global_plddt.append(float(entry["globalMetricValue"]))
+        resolution_methods_by_site[
+            str(entry.get("resolution_method", "phase1_direct_accession"))
+        ] += 1
         score_by_label[record.label].append(score)
         category_counts[confidence_category(score)] += 1
 
@@ -167,6 +171,11 @@ def main() -> None:
         >= float(config["minimum_negative_site_coverage"]),
     }
     training_authorized = all(checks.values())
+    resolution_methods_by_accession = Counter(
+        str(entry.get("resolution_method", "phase1_direct_accession"))
+        for entry in entries.values()
+        if isinstance(entry, dict) and entry.get("status") == "available"
+    )
     high_confidence = float(config["high_confidence_plddt"])
     report = {
         "status": (
@@ -205,6 +214,13 @@ def main() -> None:
             ),
         },
         "reason_counts": dict(reason_counts),
+        "identifier_resolution": {
+            "methods_by_site": dict(resolution_methods_by_site),
+            "methods_by_unique_accession": dict(
+                resolution_methods_by_accession
+            ),
+            "acceptance_rule": "exact complete sequence only",
+        },
         "reason_counts_by_label": {
             "negative": dict(reason_by_label[0]),
             "positive": dict(reason_by_label[1]),

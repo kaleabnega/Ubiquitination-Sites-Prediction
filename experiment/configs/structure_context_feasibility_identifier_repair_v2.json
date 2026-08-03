@@ -1,0 +1,21 @@
+{
+  "experiment_name": "structure_context_feasibility_identifier_repair_v2",
+  "data_dir": "replication/MMUbiPred",
+  "sequence_cache": "/content/drive/MyDrive/MMUbiPred-research/context/uniprot_training_sequences.json",
+  "output_dir": "/content/drive/MyDrive/MMUbiPred-research/structure/structure-context-feasibility-identifier-repair-v2",
+  "context_window_size": 257,
+  "minimum_site_coverage": 0.95,
+  "minimum_positive_site_coverage": 0.95,
+  "minimum_negative_site_coverage": 0.95,
+  "high_confidence_plddt": 70.0,
+  "low_confidence_policy": "retain with explicit confidence and geometry-validity mask; do not discard labels based on pLDDT",
+  "training_if_feasible": "freeze the existing context branch first and cross-fit only a lightweight bounded structural residual",
+  "protocol_amendment": {
+    "basis": "training-only Phase-1 audit identified obsolete or secondary accession failures",
+    "permitted_repair": "official UniProt primary-accession resolution followed by exact complete-sequence identity",
+    "fuzzy_sequence_matching": false,
+    "coverage_thresholds_changed": false,
+    "phase1_report_overwritten": false
+  },
+  "released_independent_or_external_test_access": false
+}

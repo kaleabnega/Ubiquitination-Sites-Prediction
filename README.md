@@ -261,6 +261,16 @@ predeclared coverage gate passes.
 
 [Open the structure-feasibility audit notebook](experiment/notebooks/15_Structure_Context_Feasibility_Audit_Colab.ipynb)
 
+The frozen Phase-1 audit retained 81,928 of 89,551 context-valid training
+sites: 91.49% overall, 93.14% positive, and 89.77% negative coverage. It
+therefore failed all three unchanged 95% gates. Notebook 16 performs the one
+permitted training-only identifier-repair amendment in a separate directory.
+It accepts an AlphaFold alias or current UniProt primary accession only when
+the complete sequence exactly matches the frozen cache; it does not use fuzzy
+matching, alter the gates, fit a model, or access a test set.
+
+[Open the identifier-repair audit notebook](experiment/notebooks/16_Structure_Identifier_Repair_Audit_Colab.ipynb)
+
 Read the
 [structure-aware context residual protocol](experiment/methods/structure_context_residual_v1.md).
 

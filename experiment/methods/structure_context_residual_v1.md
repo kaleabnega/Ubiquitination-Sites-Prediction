@@ -38,6 +38,18 @@ site coverage each reach `95%`. Low-confidence residues are retained with an
 explicit mask rather than removed, because excluding disordered regions could
 selectively discard biologically meaningful ubiquitination sites.
 
+### Identifier-repair amendment
+
+The frozen Phase-1 audit failed the three 95% coverage gates. Before rejecting
+the structural residual, one training-only identifier-repair audit is allowed.
+The original cache and report remain unchanged. A failed accession may be
+replaced by a current UniProt primary accession only when the official UniProt
+record contains the exact complete cached sequence. An AlphaFold record returned
+under an accession alias is accepted under the same exact full-sequence rule.
+Fuzzy sequence matching, partial structures, changes to the coverage gates, and
+access to either released test cohort are prohibited. If the amended audit still
+fails any frozen coverage gate, Phase 2 is not authorized.
+
 ## Planned Phase 2 architecture
 
 Phase 2 is designed only if the audit passes. It retains the frozen

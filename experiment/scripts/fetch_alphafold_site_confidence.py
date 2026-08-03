@@ -31,11 +31,13 @@ from ubipred.fasta import load_released_split  # noqa: E402
 from ubipred.structure import (  # noqa: E402
     compact_prediction_metadata,
     parse_confidence_document,
-    select_canonical_prediction,
+    select_exact_prediction_alias,
+    select_exact_uniprot_primary,
 )
 
 
 API_TEMPLATE = "https://alphafold.ebi.ac.uk/api/prediction/{accession}"
+UNIPROT_SEARCH_URL = "https://rest.uniprot.org/uniprotkb/search"
 THREAD_LOCAL = threading.local()
 
 
@@ -55,6 +57,14 @@ def write_json_atomic(path: Path, payload: object) -> None:
     os.replace(temporary, path)
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def make_session() -> requests.Session:
     session = requests.Session()
     retry = Retry(
@@ -65,7 +75,7 @@ def make_session() -> requests.Session:
     )
     session.mount("https://", HTTPAdapter(max_retries=retry))
     session.headers["User-Agent"] = (
-        "Ubiquitination-Sites-Prediction/structure-feasibility-v1 "
+        "Ubiquitination-Sites-Prediction/structure-feasibility-v2 "
         "(academic research)"
     )
     return session
@@ -79,28 +89,70 @@ def session_for_thread() -> requests.Session:
     return session
 
 
-def fetch_accession(
+def fetch_prediction_list(
+    session: requests.Session,
     accession: str,
-    sequence: str,
-    positions: list[int],
     timeout_seconds: int,
-) -> dict[str, object]:
-    session = session_for_thread()
+) -> list[dict[str, object]] | None:
     response = session.get(
         API_TEMPLATE.format(accession=accession), timeout=timeout_seconds
     )
     if response.status_code == 404:
-        return {"status": "not_found", "accession": accession}
+        return None
     response.raise_for_status()
     predictions = response.json()
     if not isinstance(predictions, list):
         raise TypeError("AlphaFold prediction API did not return a list")
-    selected, reason = select_canonical_prediction(
-        accession, sequence, predictions
+    if not all(isinstance(value, dict) for value in predictions):
+        raise TypeError("AlphaFold prediction records must be dictionaries")
+    return predictions
+
+
+def resolve_uniprot_primary(
+    session: requests.Session,
+    accession: str,
+    sequence: str,
+    timeout_seconds: int,
+) -> tuple[str | None, str]:
+    response = session.get(
+        UNIPROT_SEARCH_URL,
+        params={
+            "query": f"(accession:{accession} OR sec_acc:{accession})",
+            "format": "json",
+            "fields": "accession,sequence",
+            "size": "10",
+        },
+        timeout=timeout_seconds,
     )
-    if selected is None:
-        return {"status": reason, "accession": accession}
-    metadata = compact_prediction_metadata(accession, sequence, selected)
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict) or not isinstance(
+        payload.get("results"), list
+    ):
+        raise TypeError("UniProt search API did not return a results list")
+    return select_exact_uniprot_primary(
+        accession, sequence, payload["results"]
+    )
+
+
+def attach_site_confidence(
+    session: requests.Session,
+    requested_accession: str,
+    resolved_accession: str,
+    sequence: str,
+    positions: list[int],
+    selected: dict[str, object],
+    selection_reason: str,
+    resolution_method: str,
+    timeout_seconds: int,
+) -> dict[str, object]:
+    metadata = compact_prediction_metadata(
+        requested_accession, sequence, selected
+    )
+    metadata["requested_accession"] = requested_accession
+    metadata["resolved_accession"] = resolved_accession
+    metadata["selection_reason"] = selection_reason
+    metadata["resolution_method"] = resolution_method
     confidence_url = metadata.get("plddtDocUrl")
     if not confidence_url:
         return {**metadata, "status": "confidence_url_missing"}
@@ -125,14 +177,128 @@ def fetch_accession(
     return metadata
 
 
+def terminal_failure(
+    accession: str,
+    status: str,
+    *,
+    original_afdb_status: str,
+    uniprot_resolution_status: str,
+    resolved_accession: str | None = None,
+) -> dict[str, object]:
+    return {
+        "status": status,
+        "accession": accession,
+        "requested_accession": accession,
+        "resolved_accession": resolved_accession,
+        "original_afdb_status": original_afdb_status,
+        "uniprot_resolution_status": uniprot_resolution_status,
+        "identifier_repair_attempted": True,
+    }
+
+
+def fetch_accession(
+    accession: str,
+    sequence: str,
+    positions: list[int],
+    timeout_seconds: int,
+) -> dict[str, object]:
+    session = session_for_thread()
+    predictions = fetch_prediction_list(session, accession, timeout_seconds)
+    original_status = "not_found"
+    if predictions is not None:
+        selected, original_status = select_exact_prediction_alias(
+            accession, sequence, predictions
+        )
+        if selected is not None:
+            resolved = str(selected.get("uniprotAccession") or accession)
+            method = (
+                "direct_accession"
+                if resolved == accession
+                else "afdb_returned_exact_sequence_alias"
+            )
+            return attach_site_confidence(
+                session,
+                accession,
+                resolved,
+                sequence,
+                positions,
+                selected,
+                original_status,
+                method,
+                timeout_seconds,
+            )
+
+    resolved, resolution_status = resolve_uniprot_primary(
+        session, accession, sequence, timeout_seconds
+    )
+    if resolved is None:
+        return terminal_failure(
+            accession,
+            resolution_status,
+            original_afdb_status=original_status,
+            uniprot_resolution_status=resolution_status,
+        )
+    if resolved == accession:
+        final_status = (
+            "afdb_not_found_after_exact_uniprot_resolution"
+            if predictions is None
+            else "afdb_exact_full_sequence_not_returned_after_resolution"
+        )
+        return terminal_failure(
+            accession,
+            final_status,
+            original_afdb_status=original_status,
+            uniprot_resolution_status=resolution_status,
+            resolved_accession=resolved,
+        )
+
+    repaired_predictions = fetch_prediction_list(
+        session, resolved, timeout_seconds
+    )
+    if repaired_predictions is None:
+        return terminal_failure(
+            accession,
+            "afdb_not_found_after_primary_mapping",
+            original_afdb_status=original_status,
+            uniprot_resolution_status=resolution_status,
+            resolved_accession=resolved,
+        )
+    selected, repaired_status = select_exact_prediction_alias(
+        resolved, sequence, repaired_predictions
+    )
+    if selected is None:
+        return terminal_failure(
+            accession,
+            "afdb_exact_full_sequence_not_returned_after_primary_mapping",
+            original_afdb_status=original_status,
+            uniprot_resolution_status=resolution_status,
+            resolved_accession=resolved,
+        )
+    model_accession = str(selected.get("uniprotAccession") or resolved)
+    return attach_site_confidence(
+        session,
+        accession,
+        model_accession,
+        sequence,
+        positions,
+        selected,
+        repaired_status,
+        "uniprot_primary_exact_sequence_mapping",
+        timeout_seconds,
+    )
+
+
 def entry_complete(entry: object, positions: list[int]) -> bool:
     if not isinstance(entry, dict):
         return False
     status = str(entry.get("status", ""))
     if status in {
-        "not_found",
-        "canonical_accession_not_returned",
-        "exact_full_sequence_not_returned",
+        "uniprot_exact_sequence_not_returned",
+        "uniprot_exact_sequence_mapping_ambiguous",
+        "afdb_not_found_after_exact_uniprot_resolution",
+        "afdb_exact_full_sequence_not_returned_after_resolution",
+        "afdb_not_found_after_primary_mapping",
+        "afdb_exact_full_sequence_not_returned_after_primary_mapping",
         "confidence_url_missing",
         "site_confidence_incomplete",
     }:
@@ -148,6 +314,11 @@ def main() -> None:
     parser.add_argument("--data-dir", default="replication/MMUbiPred")
     parser.add_argument("--sequence-cache", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--seed-cache",
+        type=Path,
+        help="Frozen Phase-1 cache copied into a distinct repair cache",
+    )
     parser.add_argument("--context-window-size", type=int, default=257)
     parser.add_argument("--max-workers", type=int, default=6)
     parser.add_argument("--checkpoint-every", type=int, default=25)
@@ -182,12 +353,16 @@ def main() -> None:
 
     if output_path.exists():
         cache = json.loads(output_path.read_text(encoding="utf-8"))
-        if int(cache.get("schema_version", 0)) != 1:
-            raise ValueError("Unsupported AlphaFold cache schema")
-        if cache.get("sequence_cache_sha256") != sequence_hash:
-            raise ValueError("UniProt sequence cache changed since AFDB retrieval")
-        if cache.get("required_accessions_sha256") != required_hash:
-            raise ValueError("Required accession set changed since AFDB retrieval")
+    elif args.seed_cache is not None:
+        seed_cache_path = resolve_project_path(args.seed_cache)
+        cache = json.loads(seed_cache_path.read_text(encoding="utf-8"))
+        cache["phase1_seed_cache"] = {
+            "path": str(seed_cache_path),
+            "sha256": sha256_file(seed_cache_path),
+        }
+        cache["identifier_repair_created_at_utc"] = dt.datetime.now(
+            dt.timezone.utc
+        ).isoformat()
     else:
         cache = {
             "schema_version": 1,
@@ -199,6 +374,18 @@ def main() -> None:
             "required_accessions_sha256": required_hash,
             "entries": {},
         }
+    if int(cache.get("schema_version", 0)) != 1:
+        raise ValueError("Unsupported AlphaFold cache schema")
+    if cache.get("sequence_cache_sha256") != sequence_hash:
+        raise ValueError("UniProt sequence cache changed since AFDB retrieval")
+    if cache.get("required_accessions_sha256") != required_hash:
+        raise ValueError("Required accession set changed since AFDB retrieval")
+    cache["identifier_repair_protocol"] = {
+        "version": 1,
+        "uniprot_search_url": UNIPROT_SEARCH_URL,
+        "sequence_acceptance": "exact complete sequence only",
+        "fuzzy_matching": False,
+    }
     entries = cache.get("entries")
     if not isinstance(entries, dict):
         raise TypeError("AlphaFold cache entries must be a dictionary")

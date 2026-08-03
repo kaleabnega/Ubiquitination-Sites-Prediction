@@ -13,6 +13,8 @@ from ubipred.structure import (  # noqa: E402
     confidence_category,
     parse_confidence_document,
     select_canonical_prediction,
+    select_exact_prediction_alias,
+    select_exact_uniprot_primary,
     sequence_sha256,
 )
 
@@ -61,6 +63,72 @@ class StructureTests(unittest.TestCase):
         self.assertIsNone(selected)
         self.assertEqual(reason, "exact_full_sequence_not_returned")
 
+    def test_accepts_accession_alias_only_for_exact_full_sequence(self) -> None:
+        selected, reason = select_exact_prediction_alias(
+            "OLD1",
+            "MAKAA",
+            [
+                {
+                    "uniprotAccession": "NEW1",
+                    "uniprotSequence": "MAKAA",
+                    "uniprotStart": 1,
+                    "uniprotEnd": 5,
+                    "modelEntityId": "AF-NEW1-F1",
+                    "latestVersion": 4,
+                }
+            ],
+        )
+        self.assertEqual(reason, "available_via_afdb_alias")
+        self.assertEqual(selected["uniprotAccession"], "NEW1")
+
+        rejected, rejected_reason = select_exact_prediction_alias(
+            "OLD1",
+            "MAKAA",
+            [
+                {
+                    "uniprotAccession": "NEW1",
+                    "uniprotSequence": "MAKA",
+                    "uniprotStart": 1,
+                    "uniprotEnd": 4,
+                }
+            ],
+        )
+        self.assertIsNone(rejected)
+        self.assertEqual(
+            rejected_reason, "canonical_accession_not_returned"
+        )
+
+    def test_resolves_uniprot_primary_only_by_unique_exact_sequence(self) -> None:
+        resolved, reason = select_exact_uniprot_primary(
+            "OLD1",
+            "MAKAA",
+            [
+                {
+                    "primaryAccession": "NEW1",
+                    "sequence": {"value": "MAKAA"},
+                },
+                {
+                    "primaryAccession": "OTHER",
+                    "sequence": {"value": "DIFFERENT"},
+                },
+            ],
+        )
+        self.assertEqual(resolved, "NEW1")
+        self.assertEqual(reason, "mapped_primary_exact_sequence")
+
+        ambiguous, ambiguous_reason = select_exact_uniprot_primary(
+            "OLD1",
+            "MAKAA",
+            [
+                {"primaryAccession": "NEW1", "sequence": {"value": "MAKAA"}},
+                {"primaryAccession": "NEW2", "sequence": {"value": "MAKAA"}},
+            ],
+        )
+        self.assertIsNone(ambiguous)
+        self.assertEqual(
+            ambiguous_reason, "uniprot_exact_sequence_mapping_ambiguous"
+        )
+
     def test_parses_confidence_and_categories(self) -> None:
         confidence = parse_confidence_document(
             [
@@ -98,6 +166,7 @@ class StructureTests(unittest.TestCase):
         self.assertEqual(compact["sequence_length"], 5)
         self.assertEqual(compact["sequence_sha256"], sequence_sha256(sequence))
         self.assertEqual(compact["status"], "available")
+        self.assertIsNone(compact["model_uniprot_accession"])
 
 
 if __name__ == "__main__":

@@ -334,6 +334,15 @@ frozen overall and per-class coverage gates pass.
 
 [Open the structure-feasibility audit in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/15_Structure_Context_Feasibility_Audit_Colab.ipynb)
 
+The frozen audit obtained 91.49% overall, 93.14% positive, and 89.77%
+negative site coverage, so it did not authorize structural training. Notebook
+16 preserves that result while retrying only failed identifiers through exact
+full-sequence AlphaFold aliases and official UniProt primary-accession
+resolution. The amended cache and report are written separately, and the same
+three 95% gates remain binding.
+
+[Open the exact identifier-repair audit in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/16_Structure_Identifier_Repair_Audit_Colab.ipynb)
+
 See the
 [`structure-aware context residual protocol`](methods/structure_context_residual_v1.md).
 
