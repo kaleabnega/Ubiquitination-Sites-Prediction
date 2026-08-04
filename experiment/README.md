@@ -359,6 +359,19 @@ post-primary exploratory.
 See the
 [`external residual-hybrid assessment protocol`](methods/external_residual_hybrid_exploratory_v1.md).
 
+Notebook 18 is an isolated post-test fixed-duration rebuild. It trains both residual
+hybrid experts for exactly 30 epochs in every protein-grouped outer fold, uses
+only epoch-30 OOF predictions to refit the stacker, and then supports a
+30-epoch full-data refit of both components. Early stopping and best-checkpoint
+selection are absent. Complete optimizer, AMP, RNG, DataLoader, and history
+state is saved after every epoch so the single Drive run directory can be
+copied and resumed under another Colab account. No test set is accessed.
+
+[Open the fixed-30-epoch residual-hybrid rebuild in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/18_MMUbiPred_Context_Residual_Fixed30_Colab.ipynb)
+
+See the
+[`fixed-30-epoch rebuild protocol`](methods/mmubipred_context_residual_fixed30_exploratory_v1.md).
+
 ## Layout
 
 ```text

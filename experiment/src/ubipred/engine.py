@@ -465,9 +465,9 @@ def refit_model(
                 "Resume checkpoint metadata does not match this code/configuration"
             )
         completed_epoch = int(resume_checkpoint["completed_epoch"])
-        if completed_epoch >= epochs:
+        if completed_epoch > epochs:
             raise ValueError(
-                "Resume checkpoint already reached or exceeded the requested "
+                "Resume checkpoint exceeded the requested "
                 f"duration: completed={completed_epoch}, requested={epochs}"
             )
         _load_trainable_state(model, resume_checkpoint["model_state_dict"])

@@ -287,6 +287,21 @@ MMUbiPred.
 Read the
 [external residual-hybrid assessment protocol](experiment/methods/external_residual_hybrid_exploratory_v1.md).
 
+Notebook 18 performs a separate fixed-duration sensitivity analysis requested
+after all historical and external results were inspected. Both the
+MMUbiPred-compatible local expert and 257-residue LoRA-ESM2 context expert run
+for exactly 30 epochs in each of five protein-grouped folds, without early
+stopping or best-epoch selection. Epoch-30 OOF probabilities fit a new residual
+stacker, after which both components can be refitted on all eligible training
+records for 30 epochs. Every epoch is Drive-checkpointed for cross-account
+resume. The workflow is permanently post-test exploratory and does not load a
+test set.
+
+[Open the fixed-30-epoch residual-hybrid notebook](experiment/notebooks/18_MMUbiPred_Context_Residual_Fixed30_Colab.ipynb)
+
+Read the
+[fixed-30-epoch rebuild protocol](experiment/methods/mmubipred_context_residual_fixed30_exploratory_v1.md).
+
 ## Repository layout
 
 ```text

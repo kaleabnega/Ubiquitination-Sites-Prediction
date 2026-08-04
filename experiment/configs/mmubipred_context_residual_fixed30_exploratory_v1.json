@@ -1,0 +1,55 @@
+{
+  "experiment_name": "mmubipred_context_residual_fixed30_exploratory_v1",
+  "analysis_role": "post-test exploratory fixed-duration rebuild",
+  "confirmatory_claim_allowed": false,
+  "historical_test_informed": true,
+  "data_dir": "replication/MMUbiPred",
+  "sequence_cache": "/content/drive/MyDrive/MMUbiPred-research/context/uniprot_training_sequences.json",
+  "output_dir": "/content/drive/MyDrive/MMUbiPred-research/experiments/mmubipred-context-residual-fixed30-exploratory-v1",
+  "seed": 42,
+  "outer_folds": 5,
+  "fixed_epochs": 30,
+  "context_window_size": 257,
+  "minimum_validated_fraction": 0.95,
+  "num_workers": 0,
+  "stacker_l2_strength": 0.01,
+  "reporting_threshold": 0.5,
+  "local_expert": {
+    "seed": 123,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0,
+    "optimizer": "adam",
+    "optimizer_epsilon": 1e-7,
+    "gradient_clip_norm": null,
+    "gradient_accumulation_steps": 1,
+    "use_amp": false,
+    "model": {
+      "architecture": "mmubipred_compatible",
+      "l1_coefficient": 0.0001
+    }
+  },
+  "context_expert": {
+    "seed": 42,
+    "batch_size": 32,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.0001,
+    "optimizer": "adamw",
+    "optimizer_epsilon": 1e-8,
+    "gradient_clip_norm": 1.0,
+    "gradient_accumulation_steps": 4,
+    "use_amp": true,
+    "model": {
+      "architecture": "long_context_lora_esm2_v1",
+      "pretrained_model_name": "facebook/esm2_t12_35M_UR50D",
+      "classifier_hidden_dim": 256,
+      "dropout": 0.3,
+      "local_radius": 24,
+      "head_learning_rate_multiplier": 3.0,
+      "lora_rank": 8,
+      "lora_alpha": 16,
+      "lora_dropout": 0.1,
+      "lora_target_modules": ["query", "value"]
+    }
+  }
+}
