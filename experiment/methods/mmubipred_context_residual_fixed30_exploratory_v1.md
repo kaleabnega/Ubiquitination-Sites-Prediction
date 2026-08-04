@@ -60,6 +60,12 @@ only `best.pt` is insufficient. A hardware change can still introduce small
 floating-point differences even though the protocol and stochastic state are
 preserved.
 
+The Colab command does not name individual folds. On every invocation it scans
+folds 0–4 in order, reuses completed `outer_predictions.npz` artifacts, resumes
+the first interrupted component, and proceeds through all remaining work.
+Consequently, the same cell is used before and after a runtime interruption or
+account transfer; no fold-selection variable is edited by the user.
+
 ## Test isolation
 
 The notebook and both training scripts load only the released training split
