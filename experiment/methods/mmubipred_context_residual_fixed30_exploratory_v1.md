@@ -66,6 +66,14 @@ the first interrupted component, and proceeds through all remaining work.
 Consequently, the same cell is used before and after a runtime interruption or
 account transfer; no fold-selection variable is edited by the user.
 
+Before training, the notebook preflight enumerates the configuration, both
+training entry points, the fixed protocol module, positive and negative
+released training FASTAs, AAindex table, and UniProt sequence cache. Every
+artifact must be a nonempty file. It also verifies that the configured Drive
+paths match the notebook and performs a create/delete write probe in the run
+directory. Training does not start if any requirement is missing or Drive is
+not writable.
+
 ## Test isolation
 
 The notebook and both training scripts load only the released training split
