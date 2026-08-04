@@ -346,6 +346,19 @@ three 95% gates remain binding.
 See the
 [`structure-aware context residual protocol`](methods/structure_context_residual_v1.md).
 
+Notebook 17 evaluates the already frozen residual hybrid on both completed
+external cohorts without retraining or repeating exact-MMUbiPred/ESM-2
+inference. It validates and reuses the checksum-locked paper and context
+probabilities, performs only local-expert inference, and applies the unchanged
+residual stacker at threshold `0.5`. The 286-site and 740-site comparisons use
+10,000 paired canonical-accession cluster-bootstrap replicates and remain
+post-primary exploratory.
+
+[Open the residual-hybrid external assessment in Google Colab](https://colab.research.google.com/github/kaleabnega/Ubiquitination-Sites-Prediction/blob/main/experiment/notebooks/17_Residual_Hybrid_External_Assessment_Colab.ipynb)
+
+See the
+[`external residual-hybrid assessment protocol`](methods/external_residual_hybrid_exploratory_v1.md).
+
 ## Layout
 
 ```text

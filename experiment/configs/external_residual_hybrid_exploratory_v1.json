@@ -1,0 +1,30 @@
+{
+  "experiment_name": "external_residual_hybrid_exploratory_v1",
+  "architecture_config": "experiment/configs/mmubipred_context_residual_v1.json",
+  "candidate": "mmubipred_context_residual_hybrid_v1",
+  "comparator": "exact_released_mmubipred",
+  "threshold": 0.5,
+  "bootstrap_replicates": 10000,
+  "bootstrap_unit": "canonical_accession",
+  "confidence_level": 0.95,
+  "fusion_weights_or_threshold_may_be_changed": false,
+  "external_labels_may_be_used_for_selection": false,
+  "analysis_role": "post-primary exploratory transportability assessment of previously frozen weights",
+  "confirmatory_claim_allowed": false,
+  "cohorts": {
+    "dbptm_ptmgpt2_286": {
+      "expected_sites": 286,
+      "expected_negative_sites": 191,
+      "expected_positive_sites": 95,
+      "expected_unique_accessions": 231,
+      "bootstrap_seed": 20260804
+    },
+    "disjoint_dbptm_740": {
+      "expected_sites": 740,
+      "expected_negative_sites": 369,
+      "expected_positive_sites": 371,
+      "expected_unique_accessions": 477,
+      "bootstrap_seed": 20260805
+    }
+  }
+}

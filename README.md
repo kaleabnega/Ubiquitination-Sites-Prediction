@@ -274,6 +274,19 @@ matching, alter the gates, fit a model, or access a test set.
 Read the
 [structure-aware context residual protocol](experiment/methods/structure_context_residual_v1.md).
 
+Notebook 17 performs the missing external transportability check for the
+previously frozen MMUbiPred–Context Residual Hybrid. It reuses the immutable
+exact-MMUbiPred and context probabilities from the completed 286-site and
+740-site evaluations, runs only the small frozen local expert, and applies the
+unchanged OOF-fitted stacker. Both comparisons are explicitly post-primary;
+paired protein-cluster bootstrap intervals are reported against exact
+MMUbiPred.
+
+[Open the residual-hybrid external assessment](experiment/notebooks/17_Residual_Hybrid_External_Assessment_Colab.ipynb)
+
+Read the
+[external residual-hybrid assessment protocol](experiment/methods/external_residual_hybrid_exploratory_v1.md).
+
 ## Repository layout
 
 ```text
