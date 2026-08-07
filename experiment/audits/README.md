@@ -7,6 +7,6 @@ python3 experiment/scripts/audit_dataset.py \
   --data-dir replication/MMUbiPred
 ```
 
-The audit is committed because it describes the immutable benchmark inputs.
-Generated training artifacts belong under the ignored `experiment/outputs/`
+The committed audit describes the immutable benchmark inputs. Generated
+training artifacts are stored under the ignored `experiment/outputs/`
 directory.

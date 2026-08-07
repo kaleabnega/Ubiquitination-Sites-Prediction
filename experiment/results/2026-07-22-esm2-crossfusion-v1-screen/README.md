@@ -1,7 +1,7 @@
 # ESM2-CrossFusion v1 seed-42 screen
 
-Status: **rejected**. The locked independent test was not accessed, and no
-additional seeds should be run for this version.
+Status: **rejected**. The locked independent test was not accessed. No
+additional seed runs were authorized for this version.
 
 The model reached its best validation MCC at epoch 7 and stopped after epoch
 12 following five non-improving epochs. Training loss continued falling from

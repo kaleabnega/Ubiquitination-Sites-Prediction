@@ -20,8 +20,8 @@ no collapsed runs.
 
 Values are mean ± sample standard deviation over seeds 42, 123, and 2026.
 UbiFusionNet's higher sensitivity did not compensate for its loss of
-specificity and MCC. This is a useful negative pilot, but it must not be tested
-on the independent set or presented as the proposed final architecture.
+specificity and MCC. This negative pilot was therefore not eligible for
+independent-test evaluation or designation as the proposed final architecture.
 
 The compact machine-readable aggregate copied from the Colab output is in
 `aggregates.json`. Full per-run manifests, metrics, and split hashes are kept

@@ -41,10 +41,10 @@ versioned experiment only if the frozen screen is competitive.
 ## Pretraining disclosure
 
 ESM-2 was pretrained without the ubiquitination labels used here, but it is an
-external unsupervised data source. Any paper must disclose this distinction:
-the labelled train/test split is unchanged, while the representation model has
-seen large protein-sequence corpora. The main same-data comparison should
-therefore be accompanied by a protein-homology-aware robustness analysis.
+external unsupervised data source. Manuscript reporting therefore distinguishes
+the unchanged labelled train/test split from the large protein-sequence corpus
+used to pretrain the representation model. The primary same-data comparison is
+accompanied by a protein-homology-aware robustness analysis.
 
 ## References
 

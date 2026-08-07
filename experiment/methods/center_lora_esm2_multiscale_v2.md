@@ -45,9 +45,9 @@ context.
 - Stability safeguard: predictions may not collapse to one class.
 - The independent test remains locked and no full-data refit is performed.
 
-Passing this screen grants permission only for a paired three-seed development
-comparison. A borderline outcome must be reported before any additional run.
-Failure ends this version without test-set evaluation.
+A passing screen advances the model only to a paired three-seed development
+comparison. A borderline outcome requires review before further computation;
+a failed screen ends the version without test-set evaluation.
 
 ## Interpretation boundary
 

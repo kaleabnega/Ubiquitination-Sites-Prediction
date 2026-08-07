@@ -23,5 +23,5 @@ candidate improved fixed-threshold MCC in two of three paired runs and
 selected-threshold MCC in all three.
 
 These are development results, not a direct comparison with the paper's
-independent-test MCC. V1 is retained as the development champion against which
-v2 must be compared.
+independent-test MCC. V1 was retained as the development champion and the
+reference for the v2 comparison.
