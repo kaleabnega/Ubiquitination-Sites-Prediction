@@ -27,8 +27,7 @@ a heterogeneous stacked ensemble comprising:
   out-of-fold predictions.
 
 The hybrid improved Matthews correlation coefficient (MCC) over exact
-MMUbiPred on the historical matched cohort and on two external cohorts. Its
-principal limitation is lower specificity, reflecting a shift toward greater
+MMUbiPred on the historical matched cohort and on two external cohorts. Its limitation is lower specificity, reflecting a shift toward greater
 positive-site sensitivity.
 
 ### Replication result
