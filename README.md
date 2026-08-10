@@ -45,8 +45,7 @@ processed test sites. Complete provenance is recorded in the
 
 ### Residual-hybrid evidence
 
-All comparisons below use threshold `0.5` and identical cohorts for the two
-models.
+All comparisons below use threshold `0.5` and identical cohorts for the two models.
 
 | Cohort | Sites | Exact MMUbiPred MCC | Residual hybrid MCC | Difference |
 |---|---:|---:|---:|---:|
