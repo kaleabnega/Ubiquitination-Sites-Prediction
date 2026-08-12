@@ -15,7 +15,10 @@ sys.path.insert(0, str(PROJECT_ROOT / "experiment" / "src"))
 
 from ubipred.model import LongContextLoRAESM2, MMUbiPredCompatible  # noqa: E402
 from ubipred.visualization import (  # noqa: E402
+    expert_correctness_masks,
+    positional_log2_enrichment,
     predict_with_representations,
+    radial_band_log2_enrichment,
     stratified_visualization_indices,
 )
 
@@ -96,6 +99,48 @@ class VisualizationTests(unittest.TestCase):
         self.assertEqual(len(first), 100)
         self.assertEqual(int(np.sum(labels[first] == 0)), 50)
         self.assertEqual(int(np.sum(labels[first] == 1)), 50)
+
+    def test_positional_enrichment_recovers_group_specific_residues(self) -> None:
+        sequences = ["AKA", "AKA", "GKG", "GKG"]
+        numerator = np.asarray([True, True, False, False])
+        denominator = ~numerator
+        enrichment = positional_log2_enrichment(
+            sequences, numerator, denominator
+        )
+        amino_acids = tuple("ACDEFGHIKLMNPQRSTVWY")
+        self.assertGreater(enrichment[amino_acids.index("A"), 0], 0.0)
+        self.assertLess(enrichment[amino_acids.index("G"), 0], 0.0)
+        self.assertAlmostEqual(enrichment[amino_acids.index("K"), 1], 0.0)
+
+    def test_radial_enrichment_excludes_center_and_aggregates_bands(self) -> None:
+        sequences = ["AAKAA", "AAKAA", "GGKGG", "GGKGG"]
+        numerator = np.asarray([True, True, False, False])
+        denominator = ~numerator
+        enrichment = radial_band_log2_enrichment(
+            sequences,
+            numerator,
+            denominator,
+            bands=((1, 1), (2, 2)),
+        )
+        amino_acids = tuple("ACDEFGHIKLMNPQRSTVWY")
+        self.assertEqual(enrichment.shape, (20, 2))
+        self.assertTrue(np.all(enrichment[amino_acids.index("A")] > 0.0))
+        self.assertTrue(np.all(enrichment[amino_acids.index("G")] < 0.0))
+
+    def test_correctness_masks_form_expected_partition(self) -> None:
+        labels = np.asarray([0, 0, 1, 1])
+        local = np.asarray([0.1, 0.9, 0.9, 0.1])
+        context = np.asarray([0.1, 0.9, 0.1, 0.9])
+        masks = expert_correctness_masks(labels, local, context)
+        self.assertEqual(
+            {name: np.flatnonzero(mask).tolist() for name, mask in masks.items()},
+            {
+                "Both correct": [0],
+                "Local only correct": [2],
+                "Context only correct": [3],
+                "Both wrong": [1],
+            },
+        )
 
 
 if __name__ == "__main__":

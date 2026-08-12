@@ -164,7 +164,7 @@ upstream `replication/MMUbiPred` submodule remains unmodified.
 | [16](experiment/notebooks/16_Structure_Identifier_Repair_Audit_Colab.ipynb) | Exact identifier repair | Coverage gate remained unmet |
 | [17](experiment/notebooks/17_Residual_Hybrid_External_Assessment_Colab.ipynb) | Residual-hybrid external assessment | Completed |
 | [18](experiment/notebooks/18_MMUbiPred_Context_Residual_Fixed30_Colab.ipynb) | Fixed-30-epoch residual rebuild | Ongoing exploratory analysis |
-| [19](experiment/notebooks/19_Residual_Hybrid_Visualizations_Colab.ipynb) | Frozen residual-hybrid manuscript figures | Post hoc visualization |
+| [19](experiment/notebooks/19_Residual_Hybrid_Visualizations_Colab.ipynb) | Frozen residual-hybrid performance and biological-interpretation figures | Post hoc visualization |
 
 Negative and stopped experiments remain versioned because they document the
 model-selection path and reduce selective reporting.

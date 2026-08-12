@@ -49,8 +49,29 @@ use the unchanged context-fold histories. These curves document development
 behavior and are not derived from the final full-data refits, which had no
 validation partitions.
 
+## Biological interpretation
+
+Three descriptive analyses use the same aligned matched cohort. First,
+position-specific amino-acid enrichment compares labelled ubiquitinated and
+non-ubiquitinated 49-residue windows using smoothed log2 frequency ratios.
+Second, predictions at the frozen threshold 0.5 are partitioned into both
+experts correct, local-only correct, context-only correct, and both experts
+wrong. Local sequence enrichment is then compared between the two expert-only
+groups separately within each true class. Third, positive-versus-negative
+amino-acid composition is summarized over symmetric distance bands `1–5`,
+`6–24`, `25–64`, and `65–128` in the exact-match 257-residue UniProt context.
+Padding and the invariant central lysine are excluded from the radial
+composition counts. All frequency estimates use a pseudocount of 0.5.
+
+These analyses are post hoc and hypothesis-generating. Enrichment does not
+establish a causal recognition motif, expert correctness does not demonstrate
+a molecular mechanism, and broad-context composition is not a residue-level
+attribution method. The biological figures cannot be used for model or
+threshold modification.
+
 ## Output
 
 Each figure is displayed in the notebook and exported as editable PDF and SVG,
-plus a 600-DPI PNG. Figure manifests and source-artifact hashes preserve the
-post hoc, non-confirmatory interpretation boundary.
+plus a 600-DPI PNG. Separate performance and biological-interpretation
+manifests record source-artifact hashes and preserve the post hoc,
+non-confirmatory interpretation boundary.

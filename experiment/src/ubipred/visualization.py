@@ -23,6 +23,158 @@ MODEL_COLORS = {
     "Residual hybrid": "#E76F51",
 }
 CLASS_COLORS = {0: "#2878B5", 1: "#D9534F"}
+AMINO_ACIDS = tuple("ACDEFGHIKLMNPQRSTVWY")
+COMPLEMENTARITY_COLORS = {
+    "Both correct": "#4C78A8",
+    "Local only correct": "#59A14F",
+    "Context only correct": "#E15759",
+    "Both wrong": "#B8B8B8",
+}
+
+
+def _validate_aligned_sequences(
+    sequences: Sequence[str], masks: Sequence[np.ndarray]
+) -> tuple[list[str], int]:
+    normalized = [str(sequence).upper() for sequence in sequences]
+    if not normalized:
+        raise ValueError("At least one sequence is required")
+    width = len(normalized[0])
+    if width <= 0 or any(len(sequence) != width for sequence in normalized):
+        raise ValueError("All sequences must have one identical positive length")
+    for mask in masks:
+        values = np.asarray(mask)
+        if values.shape != (len(normalized),):
+            raise ValueError("Every selection mask must align with the sequences")
+    return normalized, width
+
+
+def positional_log2_enrichment(
+    sequences: Sequence[str],
+    numerator_mask: np.ndarray,
+    denominator_mask: np.ndarray,
+    *,
+    pseudocount: float = 0.5,
+    alphabet: Sequence[str] = AMINO_ACIDS,
+) -> np.ndarray:
+    """Return smoothed position-wise residue enrichment between two groups."""
+
+    if pseudocount <= 0:
+        raise ValueError("pseudocount must be positive")
+    numerator_mask = np.asarray(numerator_mask, dtype=bool)
+    denominator_mask = np.asarray(denominator_mask, dtype=bool)
+    normalized, width = _validate_aligned_sequences(
+        sequences, (numerator_mask, denominator_mask)
+    )
+    if not numerator_mask.any() or not denominator_mask.any():
+        raise ValueError("Both enrichment groups must contain at least one sequence")
+    residues = tuple(str(residue).upper() for residue in alphabet)
+    if len(set(residues)) != len(residues) or any(len(value) != 1 for value in residues):
+        raise ValueError("The residue alphabet must contain unique single characters")
+    residue_set = set(residues)
+
+    encoded = np.asarray([list(sequence) for sequence in normalized], dtype="U1")
+    frequencies: list[np.ndarray] = []
+    for selected in (numerator_mask, denominator_mask):
+        group = encoded[selected]
+        valid = np.isin(group, residues)
+        valid_counts = valid.sum(axis=0).astype(np.float64)
+        counts = np.stack(
+            [(group == residue).sum(axis=0) for residue in residues]
+        ).astype(np.float64)
+        if not set(np.unique(group[valid])).issubset(residue_set):
+            raise AssertionError("Internal residue-alphabet error")
+        frequencies.append(
+            (counts + pseudocount)
+            / (valid_counts[np.newaxis, :] + pseudocount * len(residues))
+        )
+    if frequencies[0].shape != (len(residues), width):
+        raise AssertionError("Internal enrichment-shape error")
+    return np.log2(frequencies[0] / frequencies[1])
+
+
+def radial_band_log2_enrichment(
+    sequences: Sequence[str],
+    numerator_mask: np.ndarray,
+    denominator_mask: np.ndarray,
+    bands: Sequence[tuple[int, int]],
+    *,
+    pseudocount: float = 0.5,
+    alphabet: Sequence[str] = AMINO_ACIDS,
+) -> np.ndarray:
+    """Return residue enrichment aggregated over symmetric distance bands."""
+
+    if pseudocount <= 0:
+        raise ValueError("pseudocount must be positive")
+    numerator_mask = np.asarray(numerator_mask, dtype=bool)
+    denominator_mask = np.asarray(denominator_mask, dtype=bool)
+    normalized, width = _validate_aligned_sequences(
+        sequences, (numerator_mask, denominator_mask)
+    )
+    if width % 2 == 0:
+        raise ValueError("Radial enrichment requires odd-length centered sequences")
+    if not numerator_mask.any() or not denominator_mask.any():
+        raise ValueError("Both enrichment groups must contain at least one sequence")
+    radius = width // 2
+    normalized_bands = [(int(start), int(stop)) for start, stop in bands]
+    if not normalized_bands or any(
+        start < 1 or stop < start or stop > radius
+        for start, stop in normalized_bands
+    ):
+        raise ValueError("Distance bands must lie between 1 and the sequence radius")
+    residues = tuple(str(residue).upper() for residue in alphabet)
+    encoded = np.asarray([list(sequence) for sequence in normalized], dtype="U1")
+    matrices: list[np.ndarray] = []
+    offsets = np.arange(-radius, radius + 1)
+    for selected in (numerator_mask, denominator_mask):
+        group = encoded[selected]
+        band_frequencies: list[np.ndarray] = []
+        for start, stop in normalized_bands:
+            positions = (np.abs(offsets) >= start) & (np.abs(offsets) <= stop)
+            values = group[:, positions].reshape(-1)
+            valid = np.isin(values, residues)
+            valid_count = float(valid.sum())
+            counts = np.asarray(
+                [(values == residue).sum() for residue in residues],
+                dtype=np.float64,
+            )
+            band_frequencies.append(
+                (counts + pseudocount)
+                / (valid_count + pseudocount * len(residues))
+            )
+        matrices.append(np.stack(band_frequencies, axis=1))
+    return np.log2(matrices[0] / matrices[1])
+
+
+def expert_correctness_masks(
+    labels: np.ndarray,
+    local_probabilities: np.ndarray,
+    context_probabilities: np.ndarray,
+    *,
+    threshold: float = 0.5,
+) -> dict[str, np.ndarray]:
+    """Partition aligned predictions by local/context correctness."""
+
+    labels = np.asarray(labels, dtype=np.int64)
+    local = np.asarray(local_probabilities, dtype=np.float64)
+    context = np.asarray(context_probabilities, dtype=np.float64)
+    if labels.ndim != 1 or local.shape != labels.shape or context.shape != labels.shape:
+        raise ValueError("Labels and expert probabilities must be aligned vectors")
+    if not np.isin(labels, (0, 1)).all():
+        raise ValueError("Binary labels are required")
+    if not 0 <= threshold <= 1:
+        raise ValueError("threshold must lie between zero and one")
+    local_correct = (local >= threshold).astype(np.int64) == labels
+    context_correct = (context >= threshold).astype(np.int64) == labels
+    masks = {
+        "Both correct": local_correct & context_correct,
+        "Local only correct": local_correct & ~context_correct,
+        "Context only correct": ~local_correct & context_correct,
+        "Both wrong": ~local_correct & ~context_correct,
+    }
+    total = np.sum(np.stack(list(masks.values()), axis=0), axis=0)
+    if not np.all(total == 1):
+        raise AssertionError("Correctness groups must form an exact partition")
+    return masks
 
 
 def _representation_layer(
@@ -399,4 +551,218 @@ def plot_training_validation_curves(
             axis.spines[["top", "right"]].set_visible(False)
             axis.grid(alpha=0.2, linewidth=0.6)
     axes[0, 0].legend(frameon=False, ncol=3)
+    return figure
+
+
+def _draw_enrichment_heatmap(
+    axis: object,
+    matrix: np.ndarray,
+    xlabels: Sequence[object],
+    *,
+    title: str,
+    panel: str,
+    display_limit: float = 2.0,
+) -> object:
+    image = axis.imshow(
+        np.clip(np.asarray(matrix, dtype=np.float64), -display_limit, display_limit),
+        aspect="auto",
+        cmap="RdBu_r",
+        vmin=-display_limit,
+        vmax=display_limit,
+        interpolation="nearest",
+    )
+    axis.set_yticks(np.arange(len(AMINO_ACIDS)), AMINO_ACIDS)
+    tick_indices = np.linspace(0, len(xlabels) - 1, min(9, len(xlabels)), dtype=int)
+    axis.set_xticks(tick_indices, [str(xlabels[index]) for index in tick_indices])
+    axis.set_title(f"{panel}. {title}", loc="left", fontweight="bold")
+    axis.set_xlabel("Position relative to central lysine")
+    axis.set_ylabel("Amino acid")
+    return image
+
+
+def plot_local_sequence_enrichment(
+    sequences: Sequence[str], labels: np.ndarray
+) -> object:
+    """Plot positive-versus-negative residue enrichment in the 49-mer."""
+
+    import matplotlib.pyplot as plt
+
+    labels = np.asarray(labels, dtype=np.int64)
+    normalized, width = _validate_aligned_sequences(sequences, (labels,))
+    if width % 2 == 0 or not np.isin(labels, (0, 1)).all():
+        raise ValueError("Odd-length sequences and binary labels are required")
+    enrichment = positional_log2_enrichment(
+        normalized, labels == 1, labels == 0
+    )
+    positions = np.arange(-(width // 2), width // 2 + 1)
+    publication_style()
+    figure, axis = plt.subplots(figsize=(11.0, 4.8), constrained_layout=True)
+    image = _draw_enrichment_heatmap(
+        axis,
+        enrichment,
+        positions,
+        title="Ubiquitinated versus non-ubiquitinated local sequence",
+        panel="A",
+    )
+    axis.axvline(width // 2, color="black", lw=0.8, linestyle="--")
+    colorbar = figure.colorbar(image, ax=axis, shrink=0.88)
+    colorbar.set_label(
+        "log2 residue-frequency ratio\n(positive / negative; clipped at ±2)"
+    )
+    return figure
+
+
+def plot_expert_complementarity_biology(
+    sequences: Sequence[str],
+    labels: np.ndarray,
+    local_probabilities: np.ndarray,
+    context_probabilities: np.ndarray,
+    *,
+    threshold: float = 0.5,
+) -> tuple[object, dict[str, dict[str, int]]]:
+    """Plot correctness partition and sequence signatures of expert-only wins."""
+
+    import matplotlib.pyplot as plt
+
+    labels = np.asarray(labels, dtype=np.int64)
+    normalized, width = _validate_aligned_sequences(sequences, (labels,))
+    masks = expert_correctness_masks(
+        labels,
+        local_probabilities,
+        context_probabilities,
+        threshold=threshold,
+    )
+    counts = {
+        class_name: {
+            category: int(np.sum(mask & (labels == label)))
+            for category, mask in masks.items()
+        }
+        for label, class_name in ((0, "Non-ubiquitinated"), (1, "Ubiquitinated"))
+    }
+    for label in (0, 1):
+        if not np.any(masks["Context only correct"] & (labels == label)) or not np.any(
+            masks["Local only correct"] & (labels == label)
+        ):
+            raise ValueError(
+                "Both expert-only correctness groups are required within each class"
+            )
+    positions = np.arange(-(width // 2), width // 2 + 1)
+    positive_enrichment = positional_log2_enrichment(
+        normalized,
+        masks["Context only correct"] & (labels == 1),
+        masks["Local only correct"] & (labels == 1),
+    )
+    negative_enrichment = positional_log2_enrichment(
+        normalized,
+        masks["Context only correct"] & (labels == 0),
+        masks["Local only correct"] & (labels == 0),
+    )
+
+    publication_style()
+    figure = plt.figure(figsize=(12.0, 9.0), constrained_layout=True)
+    grid = figure.add_gridspec(2, 2, height_ratios=(0.72, 1.0))
+    count_axis = figure.add_subplot(grid[0, :])
+    classes = ("Non-ubiquitinated", "Ubiquitinated")
+    left = np.zeros(2, dtype=np.float64)
+    support = np.asarray([sum(counts[name].values()) for name in classes])
+    for category, color in COMPLEMENTARITY_COLORS.items():
+        values = np.asarray([counts[name][category] for name in classes])
+        fractions = values / support
+        count_axis.barh(
+            classes,
+            fractions,
+            left=left,
+            color=color,
+            label=category,
+            height=0.58,
+        )
+        for row, (start, fraction, value) in enumerate(zip(left, fractions, values)):
+            if fraction >= 0.055:
+                count_axis.text(
+                    start + fraction / 2,
+                    row,
+                    f"{value:,}\n{fraction * 100:.1f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color="white" if category != "Both wrong" else "black",
+                )
+        left += fractions
+    count_axis.set_xlim(0, 1)
+    count_axis.set_xlabel("Fraction within true class")
+    count_axis.set_title(
+        f"A. Expert correctness at threshold {threshold:.1f}",
+        loc="left",
+        fontweight="bold",
+    )
+    count_axis.spines[["top", "right", "left"]].set_visible(False)
+    count_axis.legend(frameon=False, ncol=4, loc="lower center", bbox_to_anchor=(0.5, 1.0))
+
+    positive_axis = figure.add_subplot(grid[1, 0])
+    negative_axis = figure.add_subplot(grid[1, 1])
+    positive_image = _draw_enrichment_heatmap(
+        positive_axis,
+        positive_enrichment,
+        positions,
+        title="Positive sites: context-only versus local-only successes",
+        panel="B",
+    )
+    _draw_enrichment_heatmap(
+        negative_axis,
+        negative_enrichment,
+        positions,
+        title="Negative sites: context-only versus local-only successes",
+        panel="C",
+    )
+    for axis in (positive_axis, negative_axis):
+        axis.axvline(width // 2, color="black", lw=0.8, linestyle="--")
+    colorbar = figure.colorbar(
+        positive_image, ax=[positive_axis, negative_axis], shrink=0.86
+    )
+    colorbar.set_label(
+        "log2 residue-frequency ratio\n(context-only / local-only; clipped at ±2)"
+    )
+    return figure, counts
+
+
+def plot_context_radial_enrichment(
+    contexts: Sequence[str],
+    labels: np.ndarray,
+    bands: Sequence[tuple[int, int]] = ((1, 5), (6, 24), (25, 64), (65, 128)),
+) -> object:
+    """Plot positive-versus-negative composition across context distance bands."""
+
+    import matplotlib.pyplot as plt
+
+    labels = np.asarray(labels, dtype=np.int64)
+    enrichment = radial_band_log2_enrichment(
+        contexts,
+        labels == 1,
+        labels == 0,
+        bands,
+    )
+    band_labels = [f"±{start}–{stop}" for start, stop in bands]
+    publication_style()
+    figure, axis = plt.subplots(figsize=(7.2, 5.0), constrained_layout=True)
+    image = axis.imshow(
+        np.clip(enrichment, -2.0, 2.0),
+        aspect="auto",
+        cmap="RdBu_r",
+        vmin=-2.0,
+        vmax=2.0,
+        interpolation="nearest",
+    )
+    axis.set_xticks(np.arange(len(band_labels)), band_labels)
+    axis.set_yticks(np.arange(len(AMINO_ACIDS)), AMINO_ACIDS)
+    axis.set_xlabel("Absolute residue distance from central lysine")
+    axis.set_ylabel("Amino acid")
+    axis.set_title(
+        "A. Ubiquitinated versus non-ubiquitinated broad-context composition",
+        loc="left",
+        fontweight="bold",
+    )
+    colorbar = figure.colorbar(image, ax=axis, shrink=0.88)
+    colorbar.set_label(
+        "log2 residue-frequency ratio\n(positive / negative; clipped at ±2)"
+    )
     return figure
