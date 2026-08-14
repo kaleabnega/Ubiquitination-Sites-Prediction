@@ -139,8 +139,7 @@ and checkpoint hashes are therefore recorded explicitly.
 ```
 
 Large model checkpoints, sequence caches, and prediction arrays are stored
-outside Git. Their paths and SHA-256 hashes are recorded in manifests. The
-upstream `replication/MMUbiPred` submodule remains unmodified.
+outside Git. Their paths and SHA-256 hashes are recorded in manifests. The upstream `replication/MMUbiPred` submodule remains unmodified.
 
 ## Notebook index
 
