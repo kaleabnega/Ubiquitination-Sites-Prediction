@@ -39,8 +39,7 @@ positive-site sensitivity.
 | Sensitivity | 0.7498020586 | 0.7498020586 | 0 |
 | Specificity | 0.8067729084 | 0.8067729084 | 0 |
 
-The replicated confusion matrix is `[[4050, 970], [1896, 5682]]` over 12,598
-processed test sites. Complete provenance is recorded in the
+The replicated confusion matrix is `[[4050, 970], [1896, 5682]]` over 12,598 processed test sites. Complete provenance is recorded in the
 [replication result](replication/results/2026-07-21-general-plmd/RESULTS.md).
 
 ### Residual-hybrid evidence
