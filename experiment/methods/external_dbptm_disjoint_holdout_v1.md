@@ -8,12 +8,13 @@
 
 ## Purpose and hypothesis
 
-This study tests the prior external observation that the frozen seven-epoch
-257-residue context model may rank ubiquitination sites better than the exact
-released MMUbiPred model. AUROC is the single primary metric. Success requires
-the lower bound of the two-sided 95% protein-cluster bootstrap interval for
-context-minus-MMUbiPred AUROC to exceed zero. MCC and the other fixed-threshold
-metrics are secondary. Both checkpoints and threshold `0.5` remain frozen.
+This study tests the prior external observation that the frozen seven-epoch,
+257-residue Long-Context Expert may rank ubiquitination sites better than the
+exact released MMUbiPred model. AUROC is the single primary metric. Success
+requires the lower bound of the two-sided 95% protein-cluster bootstrap
+interval for the Long-Context Expert minus MMUbiPred AUROC difference to
+exceed zero. MCC and the other fixed-threshold metrics are secondary. Both
+checkpoints and threshold `0.5` remain frozen.
 
 The hypothesis is explicitly informed by the completed 286-site external
 analysis, where the AUROC difference was `0.03392` but its interval included
@@ -63,6 +64,7 @@ not a guarantee of significance.
 
 Predictions remain paired by site, while bootstrap resampling uses whole
 canonical-protein groups to preserve within-protein dependence. Ten thousand
-replicates use seed 20260803. The primary context-versus-MMUbiPred comparison
-is predeclared before cohort construction or prediction. The earlier ensemble
-is not the primary candidate in this new, prior-informed study.
+replicates use seed 20260803. The primary Long-Context Expert versus MMUbiPred
+comparison is predeclared before cohort construction or prediction. The
+earlier ensemble is not the primary candidate in this new, prior-informed
+study.

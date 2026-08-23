@@ -37,6 +37,6 @@ must reproduce each published 21-mer at its stated site; released PLMD
 accessions, sites, and exact windows are removed; remaining proteins are
 excluded at at least 30% identity over at least 80% of the shorter full protein.
 The frozen primary candidate remains the equal `0.5/0.5` probability ensemble
-of the exact released MMUbiPred H5 model and the frozen seven-epoch context
-model, classified at threshold `0.5`. MCC remains primary, with the same
-secondary metrics and paired uncertainty analysis.
+of the exact released MMUbiPred H5 model and the frozen seven-epoch
+Long-Context Expert, classified at threshold `0.5`. MCC remains primary, with
+the same secondary metrics and paired uncertainty analysis.

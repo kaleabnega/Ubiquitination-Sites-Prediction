@@ -282,7 +282,7 @@ def main() -> None:
             "Both results use every processed released test record."
             if full_cohort_comparison_valid
             else (
-                "The context model could not evaluate every released test "
+                "The Long-Context Expert could not evaluate every released test "
                 "record. MMUbiPred must be evaluated on these exact validated "
                 "indices before making a matched claim."
             )

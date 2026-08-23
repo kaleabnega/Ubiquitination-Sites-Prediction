@@ -33,12 +33,13 @@ was changed between cohort freeze and inference authorization.
 
 ## Purpose and hypothesis
 
-This study tests the prior external observation that the frozen seven-epoch
-257-residue context model may rank ubiquitination sites better than the exact
-released MMUbiPred model. AUROC is the single primary metric. Success requires
-the lower bound of the two-sided 95% protein-cluster bootstrap interval for
-context-minus-MMUbiPred AUROC to exceed zero. MCC and the other fixed-threshold
-metrics are secondary. Both checkpoints and threshold `0.5` remain frozen.
+This study tests the prior external observation that the frozen seven-epoch,
+257-residue Long-Context Expert may rank ubiquitination sites better than the
+exact released MMUbiPred model. AUROC is the single primary metric. Success
+requires the lower bound of the two-sided 95% protein-cluster bootstrap
+interval for the Long-Context Expert minus MMUbiPred AUROC difference to
+exceed zero. MCC and the other fixed-threshold metrics are secondary. Both
+checkpoints and threshold `0.5` remain frozen.
 
 The hypothesis is explicitly informed by the completed 286-site external
 analysis, where the AUROC difference was `0.03392` but its interval included
@@ -75,15 +76,17 @@ sequences, and at least 98% of the reference sequences must be available.
 Predictions remain paired by site, while bootstrap resampling uses whole
 canonical-protein groups to preserve within-protein dependence. Ten thousand
 replicates use seed 20260803. There is no threshold tuning. The primary
-context-versus-exact-MMUbiPred comparison, primary AUROC endpoint, and success
-rule are unchanged from v1. The earlier ensemble is not a primary candidate.
+Long-Context Expert versus exact MMUbiPred comparison, primary AUROC endpoint,
+and success rule are unchanged from v1. The earlier ensemble is not a primary
+candidate.
 
 ## Post-primary exploratory analysis
 
 The confirmatory primary comparison was completed before evaluating the
-previously defined equal-probability MMUbiPred-context hybrid. The saved paper
-and context probabilities are averaged with fixed weights `0.5/0.5`; neither
-weight nor threshold is searched, and no neural-network inference is repeated.
+previously defined equal-probability MMUbiPred–Long-Context hybrid. The saved
+paper-model and Long-Context Expert probabilities are averaged with fixed
+weights `0.5/0.5`; neither weight nor threshold is searched, and no
+neural-network inference is repeated.
 This hybrid comparison is explicitly post-primary and exploratory. Its metric
 differences, bootstrap intervals, and p-values cannot replace or rescue the
-failed confirmatory context-versus-MMUbiPred claim.
+failed confirmatory Long-Context Expert versus MMUbiPred claim.

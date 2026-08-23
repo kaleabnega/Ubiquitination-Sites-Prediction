@@ -234,7 +234,7 @@ def main() -> None:
         != int(context_contract["refit_epochs"])
         or checkpoint.get("state_dict_scope") != "trainable_parameters"
     ):
-        raise ValueError("Context checkpoint does not match frozen contract")
+        raise ValueError("Long-Context checkpoint does not match frozen contract")
 
     site_records = [
         SiteRecord(
@@ -280,7 +280,7 @@ def main() -> None:
     context_model.to(device)
     print(
         f"device={device} external_records={len(site_records)} "
-        "context inference started",
+        "Long-Context Expert inference started",
         flush=True,
     )
     labels, context_probabilities, indices, diagnostics = predict(
@@ -291,12 +291,12 @@ def main() -> None:
     context_probabilities = context_probabilities[order].astype(np.float64)
     diagnostics = diagnostics[order]
     if not np.array_equal(indices[order], np.arange(len(site_records))):
-        raise RuntimeError("Context prediction order changed")
+        raise RuntimeError("Long-Context prediction order changed")
     expected_labels = np.asarray(
         [record.label for record in site_records], dtype=np.int64
     )
     if not np.array_equal(labels, expected_labels):
-        raise RuntimeError("Context prediction labels changed")
+        raise RuntimeError("Long-Context prediction labels changed")
     diagnostic_name = str(
         getattr(
             context_model,

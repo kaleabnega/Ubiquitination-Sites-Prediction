@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exploratory full-data local refit for the context-residual hybrid."""
+"""Exploratory full-data Short-Range refit for the context-residual hybrid."""
 
 from __future__ import annotations
 
@@ -103,7 +103,7 @@ def derive_local_refit_plan(
             )
         candidate = candidates[0]
         if bool(candidate.get("inner_collapsed", True)):
-            raise ValueError(f"Fold {fold} selected a collapsed local model")
+            raise ValueError(f"Fold {fold} selected a collapsed Short-Range model")
         best_epoch = int(
             candidate["development_selection"]["best_epoch"]
         )
@@ -194,14 +194,15 @@ def main() -> None:
     context_checkpoint_path = context_run_dir / "best.pt"
     if not context_checkpoint_path.exists():
         raise FileNotFoundError(
-            f"Frozen context checkpoint is missing: {context_checkpoint_path}"
+            "Frozen Long-Context Expert checkpoint is missing: "
+            f"{context_checkpoint_path}"
         )
     context_checkpoint = torch.load(
         context_checkpoint_path, map_location="cpu", weights_only=False
     )
     context_metadata = context_checkpoint.get("metadata")
     if not isinstance(context_metadata, dict):
-        raise TypeError("Frozen context checkpoint metadata is missing")
+        raise TypeError("Frozen Long-Context Expert checkpoint metadata is missing")
     final_context_config = dict(config["final_context_refit"])
     if (
         context_metadata.get("experiment")
@@ -213,7 +214,7 @@ def main() -> None:
     ):
         raise ValueError(
             "Residual hybrid requires the frozen primary seven-epoch "
-            "context checkpoint"
+            "Long-Context checkpoint"
         )
     context_checkpoint_hash = sha256_file(context_checkpoint_path)
 
@@ -349,13 +350,13 @@ def main() -> None:
         )
         if checkpoint.get("metadata") != checkpoint_metadata:
             raise ValueError(
-                "Completed local checkpoint does not match this protocol"
+                "Completed Short-Range checkpoint does not match this protocol"
             )
         completed = json.loads(
             completed_summary_path.read_text(encoding="utf-8")
         )
         print(json.dumps(completed, indent=2, sort_keys=True))
-        print("Completed exploratory local refit already exists; skipped.")
+        print("Completed exploratory Short-Range refit already exists; skipped.")
         print("Released independent test set was not accessed.")
         return
 
@@ -417,7 +418,7 @@ def main() -> None:
     )
     write_json(completed_summary_path, summary)
     print(json.dumps(summary, indent=2, sort_keys=True))
-    print("Local expert refit completed; context model was not retrained.")
+    print("Short-Range Expert refit completed; Long-Context Expert was not retrained.")
     print("Released independent test set was not accessed.")
 
 

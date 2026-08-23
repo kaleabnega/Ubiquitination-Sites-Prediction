@@ -8,16 +8,16 @@ post-primary and exploratory. It cannot rescue, replace, or modify either
 external cohort's completed primary analysis.
 
 The candidate is unchanged from its historical-test evaluation: the
-five-epoch full-data MMUbiPred-compatible 49-residue local refit, the frozen
-seven-epoch 257-residue LoRA-ESM2 context refit, and the nonnegative residual
+five-epoch full-data 49-residue Short-Range Expert refit, the frozen
+seven-epoch 257-residue Long-Context Expert refit, and the nonnegative residual
 logit stacker fitted only to corrected training out-of-fold predictions. Its
 weights, intercept, and threshold `0.5` are immutable.
 
 ## Reused predictions and new inference
 
-The exact released MMUbiPred and context probabilities are read from each
+The exact released MMUbiPred and Long-Context Expert probabilities are read from each
 cohort's checksum-locked completed evaluation. They are not recomputed. The
-only new inference is the frozen local PyTorch expert on the same cohort rows.
+only new inference is the frozen Short-Range Expert on the same cohort rows.
 The residual probability is then generated with the frozen stacker. No model
 is trained and no threshold, weight, feature, checkpoint, or cohort is selected
 using external labels.

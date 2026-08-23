@@ -136,8 +136,8 @@ class VisualizationTests(unittest.TestCase):
             {name: np.flatnonzero(mask).tolist() for name, mask in masks.items()},
             {
                 "Both correct": [0],
-                "Local only correct": [2],
-                "Context only correct": [3],
+                "Short-Range only correct": [2],
+                "Long-Context only correct": [3],
                 "Both wrong": [1],
             },
         )

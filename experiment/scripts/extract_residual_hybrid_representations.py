@@ -160,11 +160,13 @@ def main() -> None:
     if sha256_file(context_checkpoint_path) != str(
         context_metrics["checkpoint_sha256"]
     ):
-        raise ValueError("The frozen context checkpoint checksum changed")
+        raise ValueError(
+            "The frozen Long-Context Expert checkpoint checksum changed"
+        )
     if sha256_file(local_checkpoint_path) != str(
         hybrid_metrics["local_refit"]["checkpoint_sha256"]
     ):
-        raise ValueError("The frozen local checkpoint checksum changed")
+        raise ValueError("The frozen Short-Range Expert checkpoint checksum changed")
     if sequence_cache_sha256(sequence_cache_path) != str(
         context_metrics["test_context_cache"]["sha256"]
     ):
@@ -212,7 +214,7 @@ def main() -> None:
         or local_checkpoint.get("state_dict_scope") != "trainable_parameters"
         or local_metadata.get("model") != local_model_config
     ):
-        raise ValueError("The frozen local-expert checkpoint is incompatible")
+        raise ValueError("The frozen Short-Range Expert checkpoint is incompatible")
     local_model = build_model(
         aaindex_lookup=load_normalized_aaindex(data_dir / "aaindex31.txt"),
         window_size=49,
@@ -251,7 +253,7 @@ def main() -> None:
         or int(context_checkpoint.get("refit_epochs", -1))
         != int(final_context["epochs"])
     ):
-        raise ValueError("The frozen context-expert checkpoint is incompatible")
+        raise ValueError("The frozen Long-Context Expert checkpoint is incompatible")
     context_model = build_model(
         aaindex_lookup=load_normalized_aaindex(data_dir / "aaindex31.txt"),
         window_size=int(config["context_window_size"]),
@@ -288,7 +290,7 @@ def main() -> None:
         labels,
         local_probabilities,
         np.arange(len(labels), dtype=np.int64),
-        "Local expert",
+        "Short-Range Expert",
     )
     local_representations = local_representations[local_order].astype(np.float32)
     local_model.to("cpu")
@@ -310,15 +312,15 @@ def main() -> None:
         labels,
         context_probabilities,
         matched_indices,
-        "Context expert",
+        "Long-Context Expert",
     )
     context_representations = context_representations[context_order].astype(
         np.float32
     )
     if local_representations.shape != (len(labels), 6):
-        raise RuntimeError("Unexpected local representation shape")
+        raise RuntimeError("Unexpected Short-Range representation shape")
     if context_representations.shape != (len(labels), 256):
-        raise RuntimeError("Unexpected context representation shape")
+        raise RuntimeError("Unexpected Long-Context representation shape")
 
     np.savez_compressed(
         representations_path,
@@ -345,9 +347,11 @@ def main() -> None:
             "matched_indices_sha256": expected_index_hash,
         },
         "representations": {
-            "local": "ReLU output of the six-unit local fusion layer",
+            "local": "ReLU output of the six-unit Short-Range fusion layer",
             "local_shape": list(local_representations.shape),
-            "context": "256-dimensional context classifier penultimate GELU output",
+            "context": (
+                "256-dimensional Long-Context classifier penultimate GELU output"
+            ),
             "context_shape": list(context_representations.shape),
         },
         "context_validation": context_report,

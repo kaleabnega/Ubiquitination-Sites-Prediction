@@ -429,11 +429,14 @@ def main() -> None:
         print(json.dumps(summary, indent=2, sort_keys=True))
     else:
         print(
-            "Requested stabilized local folds completed; summary awaits all "
-            "five stabilized local predictions.",
+            "Requested stabilized Short-Range folds completed; summary awaits all "
+            "five stabilized Short-Range predictions.",
             flush=True,
         )
-    print("Existing context predictions were reused; independent test not accessed.")
+    print(
+        "Existing Long-Context Expert predictions were reused; independent "
+        "test not accessed."
+    )
 
 
 if __name__ == "__main__":

@@ -124,7 +124,7 @@ def main() -> None:
     if paper_metrics != primary_results["exact_released_mmubipred"]:
         raise ValueError("Recomputed paper metrics differ from saved results")
     if context_metrics != primary_results["frozen_context_model"]:
-        raise ValueError("Recomputed context metrics differ from saved results")
+        raise ValueError("Recomputed Long-Context metrics differ from saved results")
 
     direct_context_was_primary = (
         evaluation.get("primary_candidate")

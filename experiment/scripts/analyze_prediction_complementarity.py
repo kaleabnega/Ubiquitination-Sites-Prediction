@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnose whether frozen local and context predictions justify fusion."""
+"""Diagnose whether Short-Range and Long-Context predictions justify fusion."""
 
 from __future__ import annotations
 
@@ -191,12 +191,12 @@ def main() -> None:
     assert_metric_match(
         local_vs_context["reference_metrics"],
         expected_metrics["local_expert"]["fixed_threshold"],
-        "local expert",
+        "Short-Range Expert",
     )
     assert_metric_match(
         local_vs_context["candidate_metrics"],
         expected_metrics["context_expert"]["fixed_threshold"],
-        "context expert",
+        "Long-Context Expert",
     )
     assert_metric_match(
         context_vs_stack["candidate_metrics"],

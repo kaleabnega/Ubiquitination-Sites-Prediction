@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Continue the frozen epoch-7 context refit to epoch 15 for exploration."""
+"""Continue the frozen epoch-7 Long-Context refit to epoch 15 for exploration."""
 
 from __future__ import annotations
 

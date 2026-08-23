@@ -1203,7 +1203,7 @@ class LongContextLoRAESM2(CenterLoRAESM2):
     A single LoRA-adapted backbone supplies the central lysine, a radius-24
     local pool, and a masked global context pool. Their projected
     representations are concatenated rather than competitively gated, so the
-    context expert cannot silently discard one scale during early training.
+    Long-Context Expert cannot silently discard one scale during early training.
     """
 
     branch_names = ("esm2_center", "esm2_radius_24", "esm2_global")

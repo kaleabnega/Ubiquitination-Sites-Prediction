@@ -162,14 +162,14 @@ def main() -> None:
     )
     local_metadata = local_checkpoint.get("metadata")
     if not isinstance(local_metadata, dict):
-        raise TypeError("Local checkpoint metadata is missing")
+        raise TypeError("Short-Range checkpoint metadata is missing")
     if local_checkpoint.get("state_dict_scope") != "trainable_parameters":
-        raise ValueError("Expected compact local-expert checkpoint")
+        raise ValueError("Expected compact Short-Range Expert checkpoint")
     if (
         local_metadata.get("experiment")
         != hybrid_config["experiment_name"]
     ):
-        raise ValueError("Local checkpoint experiment identity changed")
+        raise ValueError("Short-Range checkpoint experiment identity changed")
 
     stabilized_summary = json.loads(
         stabilized_summary_path.read_text(encoding="utf-8")
@@ -187,7 +187,9 @@ def main() -> None:
     if not isinstance(stacker_values, dict):
         raise TypeError("Corrected summary is missing the final stacker")
     if stacker_values != local_metadata.get("final_stacker"):
-        raise ValueError("Frozen residual stacker changed after local refit")
+        raise ValueError(
+            "Frozen residual stacker changed after Short-Range Expert refit"
+        )
     stacker = ResidualStacker(
         intercept=float(stacker_values["intercept"]),
         local_weight=float(stacker_values["local_weight"]),
@@ -231,19 +233,19 @@ def main() -> None:
         )
     ):
         raise ValueError(
-            "Residual hybrid must use the frozen seven-epoch context model"
+            "Residual hybrid must use the frozen seven-epoch Long-Context Expert"
         )
     if (
         sha256_file(context_checkpoint_path)
         != context_metrics_result["checkpoint_sha256"]
     ):
-        raise ValueError("Frozen context checkpoint checksum changed")
+        raise ValueError("Frozen Long-Context Expert checkpoint checksum changed")
     if (
         context_metrics_result["checkpoint_sha256"]
         != local_metadata.get("context_checkpoint_sha256")
     ):
         raise ValueError(
-            "Context checkpoint differs from the one frozen at local refit"
+            "Long-Context checkpoint differs from the one frozen at Short-Range refit"
         )
     context_checkpoint = torch.load(
         context_checkpoint_path, map_location="cpu", weights_only=False
@@ -255,7 +257,7 @@ def main() -> None:
         or int(context_checkpoint.get("refit_epochs", -1))
         != int(final_context_config["epochs"])
     ):
-        raise ValueError("Context component is not the frozen primary refit")
+        raise ValueError("Long-Context component is not the frozen primary refit")
 
     matched_result = json.loads(
         matched_comparison_path.read_text(encoding="utf-8")
@@ -291,7 +293,7 @@ def main() -> None:
         rtol=0.0,
         atol=0.0,
     ):
-        raise RuntimeError("Saved context probabilities changed")
+        raise RuntimeError("Saved Long-Context probabilities changed")
 
     data_dir = resolve_project_path(config["data_dir"])
     all_records, preprocessing = load_released_split(
@@ -314,7 +316,7 @@ def main() -> None:
     )
     local_model_config = dict(config["local_expert"]["model"])
     if local_metadata.get("model") != local_model_config:
-        raise ValueError("Local model configuration changed")
+        raise ValueError("Short-Range model configuration changed")
     local_model = build_model(
         aaindex_lookup=load_normalized_aaindex(data_dir / "aaindex31.txt"),
         window_size=49,
@@ -341,9 +343,9 @@ def main() -> None:
     if not np.array_equal(
         local_indices, np.arange(len(matched_records), dtype=np.int64)
     ):
-        raise RuntimeError("Local expert prediction order is incomplete")
+        raise RuntimeError("Short-Range Expert prediction order is incomplete")
     if not np.array_equal(local_labels, labels):
-        raise RuntimeError("Local expert labels do not match the cohort")
+        raise RuntimeError("Short-Range Expert labels do not match the cohort")
 
     residual_probabilities = stacker.predict_proba(
         local_probabilities, context_probabilities
@@ -367,7 +369,7 @@ def main() -> None:
     assert_metrics_match(
         context_metrics,
         matched_result["context_model_matched_test"],
-        "frozen context",
+        "frozen Long-Context Expert",
     )
 
     results = {
@@ -383,9 +385,9 @@ def main() -> None:
         "matched_support": residual_metrics["support"],
         "matched_coverage": matched_result["matched_coverage"],
         "architecture": {
-            "local_expert": "PyTorch MMUbiPred-compatible 49-residue model",
+            "local_expert": "49-residue Short-Range Expert",
             "context_expert": (
-                "frozen seven-epoch 257-residue LoRA-ESM2 model"
+                "frozen seven-epoch 257-residue Long-Context Expert"
             ),
             "fusion": (
                 "nonnegative residual logit stacker fitted only to corrected "

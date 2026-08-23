@@ -296,7 +296,7 @@ def main() -> None:
     assert_metrics_match(
         context_metrics,
         source_results["frozen_context_model"],
-        "frozen context model",
+        "frozen Long-Context Expert",
     )
 
     local_checkpoint_path = hybrid_run_dir / "best.pt"
@@ -350,7 +350,9 @@ def main() -> None:
         str(local_metadata["context_checkpoint_sha256"])
         != str(source_results["source_artifacts"]["context_checkpoint_sha256"])
     ):
-        raise ValueError("External context predictions use a different checkpoint")
+        raise ValueError(
+            "External Long-Context Expert predictions use a different checkpoint"
+        )
     stacker = ResidualStacker(
         intercept=float(stacker_values["intercept"]),
         local_weight=float(stacker_values["local_weight"]),
@@ -380,7 +382,7 @@ def main() -> None:
     )
     local_model_config = dict(architecture_config["local_expert"]["model"])
     if local_metadata.get("model") != local_model_config:
-        raise ValueError("Local expert architecture configuration changed")
+        raise ValueError("Short-Range Expert architecture configuration changed")
     local_model = build_model(
         aaindex_lookup=load_normalized_aaindex(data_dir / "aaindex31.txt"),
         window_size=49,
@@ -391,7 +393,7 @@ def main() -> None:
     local_model.to(device)
     print(
         f"device={device} cohort={args.cohort_key} sites={len(site_records)} "
-        "frozen local inference started",
+        "frozen Short-Range Expert inference started",
         flush=True,
     )
     local_labels, local_probabilities, local_indices, diagnostics = predict(
@@ -434,8 +436,8 @@ def main() -> None:
         "external_labels_used_for_model_weight_or_threshold_selection": False,
         "cohort": cohort_lock["final_cohort"],
         "architecture": {
-            "local_expert": "frozen five-epoch MMUbiPred-compatible 49-residue refit",
-            "context_expert": "frozen seven-epoch 257-residue LoRA-ESM2 saved probabilities",
+            "local_expert": "frozen five-epoch 49-residue Short-Range Expert",
+            "context_expert": "frozen seven-epoch 257-residue Long-Context Expert",
             "fusion": "frozen nonnegative residual logit stacker",
             "stacker": stacker_values,
             "threshold": threshold,

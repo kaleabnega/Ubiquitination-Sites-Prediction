@@ -5,8 +5,8 @@
 MMUbiPred already captures strong signal within its 49-residue input. Earlier
 feature-level hybrids sometimes suppressed useful branches, and longer
 training did not repair their generalization. This experiment therefore
-preserves the paper-compatible local model as an expert and adds information
-it cannot observe: wider, target-centred protein context.
+preserves the paper-compatible topology as the Short-Range Expert and adds
+information it cannot observe: wider, target-centred protein context.
 
 This is a development experiment. The released independent test has already
 become a historical benchmark and is not read by this pipeline.
@@ -28,17 +28,17 @@ hashed. The experiment stops below 95% coverage.
 
 ## Architecture
 
-The local expert is the complete MMUbiPred-compatible topology: its AAindex
-LSTM, one-hot CNN, learned-embedding CNN, and score-level dense fusion.
+The Short-Range Expert is the complete MMUbiPred-compatible topology: its
+AAindex LSTM, one-hot CNN, learned-embedding CNN, and score-level dense fusion.
 
-The context expert applies rank-8 LoRA adapters (`alpha=16`, dropout `0.1`) to
-the query and value projections of `facebook/esm2_t12_35M_UR50D`. It consumes
-a 257-residue target-centred window and extracts the contextual central
-lysine, a masked radius-24 mean, and a masked global mean. A shared
-256-dimensional projection transforms each component. Their concatenation is
-classified by a compact dropout-regularized MLP. Concatenation is deliberate:
-unlike a competitive softmax gate, it cannot silently discard a scale early
-in training.
+The Long-Context Expert applies rank-8 LoRA adapters (`alpha=16`, dropout
+`0.1`) to the query and value projections of
+`facebook/esm2_t12_35M_UR50D`. It consumes a 257-residue target-centred window
+and extracts the contextual central lysine, a masked radius-24 mean, and a
+masked global mean. A shared 256-dimensional projection transforms each
+component. Their concatenation is classified by a compact dropout-regularized
+MLP. Concatenation is deliberate: unlike a competitive softmax gate, it cannot
+silently discard a scale early in training.
 
 LoRA uses learning rate `1e-4`; the task head uses `3e-4`. Training uses
 AdamW, weight decay `1e-4`, mixed precision, gradient clipping at 1.0, and an
@@ -47,12 +47,16 @@ effective batch size of 128. It is capped at 15 epochs with patience 4.
 The experts are combined in logit space:
 
 ```text
-z = b + w_local * logit(p_local) + w_context * logit(p_context)
+z = b + w_short * logit(p_short) + w_long * logit(p_long)
 ```
 
 Both weights are nonnegative. L2 regularization shrinks them toward `(1, 0)`,
-so context must demonstrate complementary signal rather than destabilizing a
-strong local prediction.
+so the Long-Context Expert must demonstrate complementary signal rather than
+destabilizing a strong Short-Range prediction.
+
+Legacy configuration and artifact fields retain `local_*` and `context_*` to
+load the completed runs without migration. They correspond to the Short-Range
+Expert and Long-Context Expert, respectively.
 
 ## Fold-safe evaluation
 
@@ -71,8 +75,8 @@ exploratory.
 
 The architecture advances only if the cross-fitted stack:
 
-- improves fixed-threshold MCC over the fold-matched local expert by at least
-  `0.01`;
+- improves fixed-threshold MCC over the fold-matched Short-Range Expert by at
+  least `0.01`;
 - does not reduce accuracy by more than `0.005`; and
 - does not reduce AUROC or AUPRC by more than `0.002`.
 
@@ -82,24 +86,27 @@ the historical MMUbiPred test.
 
 ## Compute and restart behavior
 
-There are ten expert-fold jobs: five local and five context. Notebook 09 can
-run one outer fold per Colab session. State is saved after every epoch, and
-completed outer predictions are reused with `--resume`. The OOF summary is
-generated automatically after all jobs exist.
+There are ten expert-fold jobs: five Short-Range and five Long-Context jobs.
+Notebook 09 can run one outer fold per Colab session. State is saved after
+every epoch, and completed outer predictions are reused with `--resume`. The
+OOF summary is generated automatically after all jobs exist.
 
-## Recorded protocol amendment: local-expert stabilization
+## Recorded protocol amendment: Short-Range Expert stabilization
 
-The original five-fold run completed with strong context-expert performance
-but local fold 4 predicted every outer sample as positive (`MCC=0`,
-`sensitivity=1`, `specificity=0`). Consequently, the original automatic `GO`
-was invalid: its reference OOF vector contained a collapsed fold. No context
-model or context prediction is changed by this amendment.
+The original five-fold run completed with strong Long-Context Expert
+performance, but Short-Range Expert fold 4 predicted every outer sample as
+positive (`MCC=0`, `sensitivity=1`, `specificity=0`). Consequently, the
+original automatic `GO` was invalid: its reference OOF vector contained a
+collapsed fold. Neither the Long-Context Expert nor its predictions are
+changed by this amendment.
 
-Before any final refit or historical-test use, all five inexpensive local
-folds are repeated under one uniform multi-initialization rule:
+Before any final refit or historical-test use, all five inexpensive
+Short-Range Expert folds are repeated under one uniform multi-initialization
+rule:
 
 1. keep the original outer and inner protein-grouped partitions fixed;
-2. train local candidates with initialization seeds `42`, `123`, and `2026`;
+2. train Short-Range Expert candidates with initialization seeds `42`, `123`,
+   and `2026`;
 3. reject candidates producing one-class inner-validation predictions;
 4. select maximum inner fixed-threshold MCC, breaking ties by AUPRC and then
    ascending seed; and
@@ -107,31 +114,32 @@ folds are repeated under one uniform multi-initialization rule:
 
 The outer fold is never used for initialization selection. Applying the same
 rule to every fold avoids a fold-4-only retry. The corrected summary reads the
-unchanged context predictions, uses the stabilized local OOF vector, and
-automatically returns `INVALID_COLLAPSED_EXPERT` if either expert still has a
-one-class outer fold.
+unchanged Long-Context Expert predictions, uses the stabilized Short-Range
+Expert OOF vector, and automatically returns `INVALID_COLLAPSED_EXPERT` if
+either expert still has a one-class outer fold.
 
 The amendment also prevents a weak fusion from advancing merely because it
-beats the local baseline. Residual fusion is selected only if its fixed MCC
-exceeds context-only MCC by at least `0.005`, with the same accuracy and
-ranking-metric safeguards. Otherwise, context alone advances if it improves
-fixed MCC over the stabilized local expert by at least `0.01` while satisfying
-those safeguards. These outcomes are reported as `ADVANCE_RESIDUAL_STACK`,
-`ADVANCE_CONTEXT_ONLY`, `STOP`, or `INVALID_COLLAPSED_EXPERT`.
+beats the Short-Range baseline. Residual fusion is selected only if its fixed
+MCC exceeds Long-Context-only MCC by at least `0.005`, with the same accuracy
+and ranking-metric safeguards. Otherwise, the Long-Context Expert alone
+advances if it improves fixed MCC over the stabilized Short-Range Expert by at
+least `0.01` while satisfying those safeguards. These outcomes are reported
+as `ADVANCE_RESIDUAL_STACK`, `ADVANCE_CONTEXT_ONLY`, `STOP`, or
+`INVALID_COLLAPSED_EXPERT`.
 
 ## Frozen corrected result and final refit
 
 The uniform stabilization completed without collapsed outer folds. At the
-fixed `0.5` threshold, the corrected local expert obtained OOF MCC `0.55626`,
-accuracy `0.75375`, AUROC `0.85650`, and AUPRC `0.88590`. The unchanged
-context expert obtained MCC `0.57901`, accuracy `0.78695`, AUROC `0.88123`,
-and AUPRC `0.90243`. The residual stack reached MCC `0.58172`, only `0.00271`
-above context, so it did not meet the `0.005` minimum fusion gain. The frozen
-decision is therefore `ADVANCE_CONTEXT_ONLY`.
+fixed `0.5` threshold, the corrected Short-Range Expert obtained OOF MCC
+`0.55626`, accuracy `0.75375`, AUROC `0.85650`, and AUPRC `0.88590`. The
+unchanged Long-Context Expert obtained MCC `0.57901`, accuracy `0.78695`, AUROC
+`0.88123`, and AUPRC `0.90243`. The residual stack reached MCC `0.58172`, only
+`0.00271` above the Long-Context Expert, so it did not meet the `0.005` minimum
+fusion gain. The frozen decision is therefore `ADVANCE_CONTEXT_ONLY`.
 
-The context inner-validation best epochs across folds 0–4 were
+The Long-Context Expert inner-validation best epochs across folds 0–4 were
 `[8, 8, 7, 6, 7]`. The final refit epoch count is their integer median:
-seven. A fresh context-only model is refitted with the unchanged optimizer,
+seven. A fresh Long-Context Expert is refitted with the unchanged optimizer,
 learning rates, LoRA configuration, 257-residue input, and seed 42 on all
 89,551 released training records that passed the frozen sequence validation.
 No validation set, threshold search, early stopping, fusion fitting, or test
@@ -171,46 +179,48 @@ evidence and would require confirmation on a new external test set.
 
 The residual stack originally failed the predeclared advancement margin by
 improving fixed-threshold OOF MCC only from `0.57901` to `0.58172`. After the
-context-only historical-test results were inspected, a separate exploratory
-pipeline was added to measure—not reselect—this previously specified hybrid.
-The frozen seven-epoch context checkpoint and the final stacker fitted to all
-corrected OOF predictions are reused without modification.
+Long-Context Expert historical-test results were inspected, a separate
+exploratory pipeline was added to measure—not reselect—this previously
+specified hybrid. The frozen seven-epoch Long-Context Expert checkpoint and
+the final stacker fitted to all corrected OOF predictions are reused without
+modification.
 
-Only the MMUbiPred-compatible local expert is refitted. Its initialization is
+Only the Short-Range Expert is refitted. Its initialization is
 the most frequently selected non-collapsed seed across the five stabilized
 folds, with an ascending-seed tie-break. Its duration is the integer median of
 the corresponding five inner-validation best epochs. It trains on the same
-89,551 context-validated released training records as the context refit and
-never reads validation or test data.
+89,551 context-validated released training records as the Long-Context Expert
+refit and never reads validation or test data.
 
 Historical-test evaluation uses the exact 12,288-record context-valid cohort,
-the already saved frozen context probabilities, and threshold `0.5`. The
-stacker intercept and nonnegative local/context weights cannot be refitted,
-threshold-tuned, or selected on the test. Results are compared side by side
-with the released MMUbiPred checkpoint, the newly refitted local expert, and
-the frozen context expert. Because the decision to revisit a candidate that
-failed its original advancement margin occurred after historical-test
-inspection, every output is permanently marked post-test exploratory and
-cannot support a confirmatory superiority claim.
+the already saved frozen Long-Context probabilities, and threshold `0.5`. The
+stacker intercept and nonnegative Short-Range/Long-Context weights cannot be
+refitted, threshold-tuned, or selected on the test. Results are compared side
+by side with the released MMUbiPred checkpoint, the newly refitted Short-Range
+Expert, and the frozen Long-Context Expert. Because the decision to revisit a
+candidate that failed its original advancement margin occurred after
+historical-test inspection, every output is permanently marked post-test
+exploratory and cannot support a confirmatory superiority claim.
 
-## Post-test exploratory exact-MMUbiPred/context ensemble
+## Post-test exploratory exact-MMUbiPred/Long-Context ensemble
 
 A separate parameter-free analysis combines the authors' exact released H5
-checkpoint predictions with the frozen seven-epoch context predictions. It
-does not substitute the PyTorch MMUbiPred-compatible expert and does not
-reuse the learned residual stacker. The primary rule is fixed before its
-result is viewed:
+checkpoint predictions with the frozen seven-epoch Long-Context Expert
+predictions. It does not substitute the Short-Range Expert and does not reuse
+the learned residual stacker. The primary rule is fixed before its result is
+viewed:
 
 ```text
-p_ensemble = 0.5 * p_released_MMUbipred + 0.5 * p_context
+p_ensemble = 0.5 * p_released_MMUbipred + 0.5 * p_long
 ```
 
 The classification threshold remains `0.5`. No weights, calibration,
 threshold, or architecture parameters are fitted. The evaluator reuses the
-saved exact-model and context probabilities on the existing 12,288-record
-matched cohort, verifies the released-model and context-checkpoint hashes,
-and refuses epoch-15 context predictions. It reports aligned component and
-ensemble metrics plus paired correctness disagreements.
+saved exact-model and Long-Context Expert probabilities on the existing
+12,288-record matched cohort, verifies the released-model and Long-Context
+Expert checkpoint hashes, and refuses epoch-15 Long-Context Expert
+predictions. It reports aligned component and ensemble metrics plus paired
+correctness disagreements.
 
 This test directly measures whether the two frozen models contain
 complementary predictive information. It remains post-test exploratory

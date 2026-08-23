@@ -18,16 +18,16 @@ from .model import LongContextLoRAESM2, MMUbiPredCompatible
 
 MODEL_COLORS = {
     "Exact MMUbiPred": "#3B4CC0",
-    "Local expert": "#2A9D8F",
-    "Context expert": "#7B2CBF",
+    "Short-Range Expert": "#2A9D8F",
+    "Long-Context Expert": "#7B2CBF",
     "Residual hybrid": "#E76F51",
 }
 CLASS_COLORS = {0: "#2878B5", 1: "#D9534F"}
 AMINO_ACIDS = tuple("ACDEFGHIKLMNPQRSTVWY")
 COMPLEMENTARITY_COLORS = {
     "Both correct": "#4C78A8",
-    "Local only correct": "#59A14F",
-    "Context only correct": "#E15759",
+    "Short-Range only correct": "#59A14F",
+    "Long-Context only correct": "#E15759",
     "Both wrong": "#B8B8B8",
 }
 
@@ -152,7 +152,7 @@ def expert_correctness_masks(
     *,
     threshold: float = 0.5,
 ) -> dict[str, np.ndarray]:
-    """Partition aligned predictions by local/context correctness."""
+    """Partition predictions by Short-Range/Long-Context correctness."""
 
     labels = np.asarray(labels, dtype=np.int64)
     local = np.asarray(local_probabilities, dtype=np.float64)
@@ -167,8 +167,8 @@ def expert_correctness_masks(
     context_correct = (context >= threshold).astype(np.int64) == labels
     masks = {
         "Both correct": local_correct & context_correct,
-        "Local only correct": local_correct & ~context_correct,
-        "Context only correct": ~local_correct & context_correct,
+        "Short-Range only correct": local_correct & ~context_correct,
+        "Long-Context only correct": ~local_correct & context_correct,
         "Both wrong": ~local_correct & ~context_correct,
     }
     total = np.sum(np.stack(list(masks.values()), axis=0), axis=0)
@@ -356,8 +356,8 @@ def plot_tsne_comparison(
     labels = np.asarray(labels, dtype=np.int64)
     figure, axes = plt.subplots(1, 2, figsize=(10.0, 4.2), constrained_layout=True)
     panels = (
-        (local_embedding, "A", "Local expert representation (6D)"),
-        (context_embedding, "B", "Context expert representation (256D)"),
+        (local_embedding, "A", "Short-Range Expert representation (6D)"),
+        (context_embedding, "B", "Long-Context Expert representation (256D)"),
     )
     for axis, (embedding, panel, title) in zip(axes, panels):
         for label, name in ((0, "Non-ubiquitinated"), (1, "Ubiquitinated")):
@@ -640,22 +640,22 @@ def plot_expert_complementarity_biology(
         for label, class_name in ((0, "Non-ubiquitinated"), (1, "Ubiquitinated"))
     }
     for label in (0, 1):
-        if not np.any(masks["Context only correct"] & (labels == label)) or not np.any(
-            masks["Local only correct"] & (labels == label)
-        ):
+        long_only = masks["Long-Context only correct"] & (labels == label)
+        short_only = masks["Short-Range only correct"] & (labels == label)
+        if not np.any(long_only) or not np.any(short_only):
             raise ValueError(
                 "Both expert-only correctness groups are required within each class"
             )
     positions = np.arange(-(width // 2), width // 2 + 1)
     positive_enrichment = positional_log2_enrichment(
         normalized,
-        masks["Context only correct"] & (labels == 1),
-        masks["Local only correct"] & (labels == 1),
+        masks["Long-Context only correct"] & (labels == 1),
+        masks["Short-Range only correct"] & (labels == 1),
     )
     negative_enrichment = positional_log2_enrichment(
         normalized,
-        masks["Context only correct"] & (labels == 0),
-        masks["Local only correct"] & (labels == 0),
+        masks["Long-Context only correct"] & (labels == 0),
+        masks["Short-Range only correct"] & (labels == 0),
     )
 
     publication_style()
@@ -704,14 +704,14 @@ def plot_expert_complementarity_biology(
         positive_axis,
         positive_enrichment,
         positions,
-        title="Positive sites: context-only versus local-only successes",
+        title="Positive sites: Long-Context-only versus Short-Range-only successes",
         panel="B",
     )
     _draw_enrichment_heatmap(
         negative_axis,
         negative_enrichment,
         positions,
-        title="Negative sites: context-only versus local-only successes",
+        title="Negative sites: Long-Context-only versus Short-Range-only successes",
         panel="C",
     )
     for axis in (positive_axis, negative_axis):
@@ -720,7 +720,8 @@ def plot_expert_complementarity_biology(
         positive_image, ax=[positive_axis, negative_axis], shrink=0.86
     )
     colorbar.set_label(
-        "log2 residue-frequency ratio\n(context-only / local-only; clipped at ±2)"
+        "log2 residue-frequency ratio\n"
+        "(Long-Context-only / Short-Range-only; clipped at ±2)"
     )
     return figure, counts
 

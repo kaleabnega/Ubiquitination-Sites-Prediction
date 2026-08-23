@@ -3,7 +3,7 @@
 ## Motivation
 
 The completed experiments do not support further fusion of sequence-derived
-MMUbiPred and ESM-2 experts. The context expert consistently improves positive
+MMUbiPred and ESM-2 experts. The Long-Context Expert consistently improves positive
 site recognition, but the residual stack captures only a small and
 fold-heterogeneous gain. Robust losses also fail to improve BCE.
 
@@ -53,23 +53,24 @@ fails any frozen coverage gate, Phase 2 is not authorized.
 ## Planned Phase 2 architecture
 
 Phase 2 is designed only if the audit passes. It retains the frozen
-257-residue LoRA-ESM-2 context predictor as the base and adds a small
+257-residue Long-Context Expert as the base and adds a small
 lysine-centred structural encoder. The final score is a bounded correction:
 
 ```text
 z_final = z_context + alpha * tanh(z_structure)
 ```
 
-The first screen freezes the context branch and cross-fits only the structural
+The first screen freezes the Long-Context Expert and cross-fits only the structural
 encoder and bounded residual head. This isolates structural incremental value
-and prevents the new branch from replacing the existing context signal.
+and prevents the new branch from replacing the existing Long-Context signal.
 BCE remains the objective. A graph encoder is considered only after coordinate
 coverage and local structural confidence are known.
 
-The structural residual must improve fixed-threshold OOF MCC over context by
-at least `0.01`, preserve AUROC and AUPRC, keep accuracy within `0.01` and both
-sensitivity and specificity within `0.02`, and improve MCC in at least four of
-five protein-grouped folds. Those thresholds will be frozen in the Phase 2
+The structural residual must improve fixed-threshold OOF MCC over the
+Long-Context Expert by at least `0.01`, preserve AUROC and AUPRC, keep accuracy
+within `0.01` and both sensitivity and specificity within `0.02`, and improve
+MCC in at least four of five protein-grouped folds. Those thresholds will be
+frozen in the Phase 2
 configuration before its predictions are produced.
 
 ## Comparison scope

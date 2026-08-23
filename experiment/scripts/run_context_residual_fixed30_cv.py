@@ -2,8 +2,9 @@
 """Five-fold fixed-30-epoch OOF training for the residual-hybrid rebuild.
 
 This is deliberately separate from the frozen validation-selected v1 workflow.
-Every local and context expert trains on its complete outer-training partition
-for exactly 30 epochs. There is no inner validation, checkpoint selection, or
+Both the Short-Range Expert and the Long-Context Expert train on their complete
+outer-training partition for exactly 30 epochs. There is no inner validation,
+checkpoint selection, or
 early stopping. The final-epoch outer-fold probabilities fit a new residual
 stacker without accessing any independent or external test set.
 """

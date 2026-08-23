@@ -209,17 +209,17 @@ def main() -> None:
         context_result.get("historical_test_informed_exploration", False)
     ):
         raise ValueError(
-            "The ensemble must use the frozen primary context checkpoint"
+            "The ensemble must use the frozen primary Long-Context Expert checkpoint"
         )
     context_checkpoint_hash = sha256_file(context_checkpoint_path)
     if context_checkpoint_hash != context_result["checkpoint_sha256"]:
-        raise ValueError("Frozen context checkpoint checksum changed")
+        raise ValueError("Frozen Long-Context Expert checkpoint checksum changed")
     context_checkpoint = torch.load(
         context_checkpoint_path, map_location="cpu", weights_only=False
     )
     context_metadata = context_checkpoint.get("metadata")
     if not isinstance(context_metadata, dict):
-        raise TypeError("Frozen context checkpoint metadata is missing")
+        raise TypeError("Frozen Long-Context Expert checkpoint metadata is missing")
     final_context_config = dict(config["final_context_refit"])
     if (
         context_metadata.get("experiment")
@@ -230,7 +230,7 @@ def main() -> None:
         != config["context_expert"]["model"]
     ):
         raise ValueError(
-            "The ensemble requires the frozen seven-epoch context model"
+            "The ensemble requires the frozen seven-epoch Long-Context Expert"
         )
 
     matched_result = json.loads(
@@ -280,7 +280,7 @@ def main() -> None:
         rtol=0.0,
         atol=0.0,
     ):
-        raise RuntimeError("Frozen context probabilities changed")
+        raise RuntimeError("Frozen Long-Context Expert probabilities changed")
 
     data_dir = resolve_project_path(config["data_dir"])
     all_records, preprocessing = load_released_split(

@@ -21,13 +21,16 @@ transportability, and structure-data feasibility.
 The strongest current candidate is the **MMUbiPred–Context Residual Hybrid**,
 a heterogeneous stacked ensemble comprising:
 
-- a 49-residue MMUbiPred-compatible local expert;
-- a 257-residue rank-8 LoRA-ESM-2 context expert; and
+- a 49-residue **Short-Range Expert** based on the MMUbiPred-compatible
+  topology;
+- a 257-residue **Long-Context Expert** implemented with rank-8 LoRA-adapted
+  ESM-2; and
 - a regularized nonnegative logistic stacker fitted to protein-grouped
   out-of-fold predictions.
 
 The hybrid improved Matthews correlation coefficient (MCC) over exact
-MMUbiPred on the historical matched cohort and on two external cohorts. Its limitation is lower specificity, reflecting a shift toward greater
+MMUbiPred on the historical matched cohort and on two external cohorts. Its
+limitation is lower specificity, reflecting a shift toward greater
 positive-site sensitivity.
 
 ### Replication result
@@ -63,7 +66,7 @@ retained throughout the repository.
 
 ## Model architecture
 
-The local expert reproduces the released MMUbiPred topology in PyTorch:
+The Short-Range Expert reproduces the released MMUbiPred topology in PyTorch:
 
 1. an AAindex representation processed by a 64-unit LSTM;
 2. a one-hot convolutional branch; and
@@ -74,7 +77,7 @@ matches the published layer dimensions, activations, dropout rates, and L1
 penalties, but its weights are independently trained and are not the authors’
 released Keras checkpoint.
 
-The context expert retrieves the full UniProt sequence associated with each
+The Long-Context Expert uses the full UniProt sequence associated with each
 released site and requires exact reconstruction of the released 49-mer. A
 257-residue window is then formed from 128 residues on either side of the
 central lysine. ESM-2 representations are summarized at three scales:
@@ -91,12 +94,17 @@ The frozen residual fusion is
 
 ```text
 logit(p) = 0.319899
-         + 0.643761 × logit(p_local)
-         + 0.557711 × logit(p_context)
+         + 0.643761 × logit(p_short)
+         + 0.557711 × logit(p_long)
 ```
 
 with L2 strength `0.01`. Nonnegative weights prevent either expert from being
 used as an inverted predictor.
+
+Historical checkpoints and saved arrays retain legacy machine-facing keys
+such as `local_*` and `context_*` for backward compatibility. In all reporting,
+`local_*` denotes the **Short-Range Expert**, while `context_*` denotes the
+**Long-Context Expert**.
 
 ## Experimental design
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare released MMUbiPred and context predictions on identical test sites."""
+"""Compare released MMUbiPred and Long-Context predictions on identical sites."""
 
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def main() -> None:
     )
     if not np.array_equal(labels[matched_indices], context_labels):
         raise RuntimeError(
-            "Context prediction labels do not match the released test order"
+            "Long-Context prediction labels do not match the released test order"
         )
     expected_indices_hash = str(
         context_result["validated_test_indices_sha256"]
@@ -151,7 +151,8 @@ def main() -> None:
     one_hot_inputs = np.eye(21, dtype=np.float64)[tokens]
 
     # Import legacy Keras only inside this fresh subprocess. This avoids
-    # contaminating the PyTorch/Transformers process used for the context model.
+    # contaminating the PyTorch/Transformers process used by the Long-Context
+    # Expert.
     os.environ["TF_USE_LEGACY_KERAS"] = "1"
     try:
         import tf_keras

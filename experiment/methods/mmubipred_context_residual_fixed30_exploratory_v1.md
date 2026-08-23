@@ -20,16 +20,16 @@ in both an outer-training and outer-validation partition.
 For every outer fold, two fresh experts are trained on the complete
 outer-training partition:
 
-- MMUbiPred-compatible 49-residue local expert, initialization seed 123 plus
+- 49-residue Short-Range Expert, initialization seed 123 plus
   the fold number;
-- rank-8 LoRA ESM-2 257-residue context expert, initialization seed 42 plus the
+- 257-residue Long-Context Expert, initialization seed 42 plus the
   fold number.
 
 Both experts complete exactly 30 epochs. There is no inner validation, early
 stopping, best-epoch selection, learning-rate selection, threshold selection,
 or outer-fold access during training. Only the epoch-30 checkpoint predicts
 the outer fold. The ten final-epoch prediction vectors are assembled into
-complete out-of-fold local and context probabilities.
+complete out-of-fold Short-Range and Long-Context probabilities.
 
 As in v1, a nonnegative L2-regularized residual logit stacker is cross-fitted
 for unbiased development reporting. A final stacker is then fitted to all OOF

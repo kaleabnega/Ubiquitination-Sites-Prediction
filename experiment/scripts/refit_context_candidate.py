@@ -338,7 +338,10 @@ def main() -> None:
     summary["independent_test_accessed"] = False
     write_json(output_dir / "refit_summary.json", summary)
     print(json.dumps(summary, indent=2, sort_keys=True))
-    print("Frozen context-only refit completed without validation or test access.")
+    print(
+        "Frozen Long-Context Expert refit completed without validation or "
+        "test access."
+    )
     print("Released independent test set was not accessed.")
 
 

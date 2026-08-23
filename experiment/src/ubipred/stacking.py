@@ -47,7 +47,7 @@ def fit_residual_stacker(
     l2_strength: float = 0.01,
     max_iterations: int = 100,
 ) -> ResidualStacker:
-    """Fit BCE stacking with nonnegative weights and a local-expert prior."""
+    """Fit BCE stacking with nonnegative weights and a Short-Range Expert prior."""
 
     if l2_strength < 0:
         raise ValueError("l2_strength must be nonnegative")

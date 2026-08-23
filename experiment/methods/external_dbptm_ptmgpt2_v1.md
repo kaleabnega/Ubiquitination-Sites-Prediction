@@ -10,9 +10,9 @@
 
 ## Purpose
 
-This protocol tests whether the already frozen exact-MMUbiPred/context
+This protocol tests whether the already frozen exact-MMUbiPred–Long-Context
 equal-probability ensemble generalizes beyond the PLMD cohort used throughout
-model development. The external labels must not be used to change the
+model development. External labels must not be used to change the
 architecture, checkpoint, fusion weights, threshold, preprocessing, or
 exclusion rules.
 
@@ -24,7 +24,7 @@ name is resolved to a canonical UniProt accession and full protein. A record
 is eligible only when its published 21-mer
 matches the current UniProt sequence exactly at the published position. The
 same verified protein is then used to construct the paper model's 49-residue
-window and the context model's 257-residue window.
+window and the Long-Context Expert's 257-residue window.
 
 ## Leakage controls
 
@@ -59,12 +59,13 @@ The primary candidate is the already specified arithmetic mean of:
 - the positive-class probability from the authors' exact released MMUbiPred
   H5 model; and
 - the positive-class probability from the frozen seven-epoch, full-training
-  257-residue LoRA-ESM-2 context model.
+  257-residue Long-Context Expert.
 
-Both weights are 0.5 and the threshold is 0.5. The exact MMUbiPred and context
-experts are secondary comparators on the identical retained cohort. MCC is the
-primary metric. Accuracy, sensitivity, specificity, precision, F1, AUROC, and
-AUPRC are secondary metrics. Paired stratified-bootstrap intervals use 10,000
+Both weights are 0.5 and the threshold is 0.5. Exact MMUbiPred and the
+Long-Context Expert are secondary comparators on the identical retained
+cohort. MCC is the primary metric. Accuracy, sensitivity, specificity,
+precision, F1, AUROC, and AUPRC are secondary metrics. Paired
+stratified-bootstrap intervals use 10,000
 replicates and seed 20260731.
 
 The ensemble was designed after inspection of the historical PLMD test and is
