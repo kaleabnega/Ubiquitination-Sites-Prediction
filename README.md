@@ -59,8 +59,7 @@ On the 740-site protein-disjoint cohort, paired protein-cluster bootstrap
 analysis supported improvements in MCC, sensitivity, F1, AUROC, and AUPRC.
 Specificity decreased from 0.3360 to 0.3035. On the smaller 286-site cohort, the AUROC improvement was statistically supported, whereas the MCC interval included zero.
 
-These evaluations are post-primary exploratory analyses of already inspected
-cohorts. They support transportability but do not constitute a new untouched
+These evaluations are post-primary exploratory analyses of already inspected cohorts. They support transportability but do not constitute a new untouched
 confirmatory test. This distinction is encoded in the result manifests and is
 retained throughout the repository.
 
