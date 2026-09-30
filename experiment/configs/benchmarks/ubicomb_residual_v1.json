@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "benchmark": "ubicomb",
+  "title": "UbiComb plant",
+  "source_url": "https://drive.google.com/drive/folders/1Bcx55mlv4FKqK2XVTww8XBaNqocnP71q",
+  "sources": {
+    "train": [
+      {
+        "filename": "UbiComb_training_data.txt",
+        "format": "ubicomb_csv"
+      }
+    ],
+    "test": [
+      {
+        "filename": "Positive_UbiCom_testing.fasta",
+        "format": "fasta",
+        "label": 1
+      },
+      {
+        "filename": "Negative_UbiCom_testing.fasta",
+        "format": "fasta",
+        "label": 0
+      }
+    ]
+  },
+  "baseline_filename": "UBICOMB_DeepUBI_AAindex_One_Hot_ProtT5_drop_out_Changed3257.h5",
+  "baseline_window": 49,
+  "baseline_sha256": null,
+  "coordinate_offset": "infer_from_training",
+  "minimum_context_coverage": 0.95,
+  "split_seed": 42,
+  "outer_folds": 5,
+  "epochs": 15,
+  "early_stopping": false,
+  "checkpoint_selection": "maximum inner-validation MCC at 0.5; earliest epoch on ties",
+  "threshold": 0.5,
+  "stacker_l2": 0.01,
+  "analysis_role": "dataset-specific benchmark extension; architecture informed by prior PLMD and external experiments",
+  "blocked_reason": null,
+  "local_expert": {
+    "inner_validation_fraction": 0.1,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "weight_decay": 0,
+    "optimizer": "adam",
+    "optimizer_epsilon": 1e-7,
+    "gradient_clip_norm": null,
+    "gradient_accumulation_steps": 1,
+    "use_amp": false,
+    "model": {
+      "architecture": "mmubipred_compatible",
+      "l1_coefficient": 0.0001
+    },
+    "initialization_seeds": [
+      42,
+      123,
+      2026
+    ]
+  },
+  "context_expert": {
+    "inner_validation_fraction": 0.1,
+    "batch_size": 32,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.0001,
+    "optimizer": "adamw",
+    "optimizer_epsilon": 1e-8,
+    "gradient_clip_norm": 1,
+    "gradient_accumulation_steps": 4,
+    "use_amp": true,
+    "model": {
+      "architecture": "long_context_lora_esm2_v1",
+      "pretrained_model_name": "facebook/esm2_t12_35M_UR50D",
+      "classifier_hidden_dim": 256,
+      "dropout": 0.3,
+      "local_radius": 24,
+      "head_learning_rate_multiplier": 3,
+      "lora_rank": 8,
+      "lora_alpha": 16,
+      "lora_dropout": 0.1,
+      "lora_target_modules": [
+        "query",
+        "value"
+      ]
+    },
+    "initialization_seeds": [
+      42
+    ]
+  }
+}

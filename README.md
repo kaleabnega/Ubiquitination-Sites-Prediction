@@ -167,9 +167,71 @@ outside Git. Their paths and SHA-256 hashes are recorded in manifests. The upstr
 | [17](experiment/notebooks/17_Residual_Hybrid_External_Assessment_Colab.ipynb) | Residual-hybrid external assessment | Completed |
 | [18](experiment/notebooks/18_MMUbiPred_Context_Residual_Fixed30_Colab.ipynb) | Fixed-30-epoch residual rebuild | Ongoing exploratory analysis |
 | [19](experiment/notebooks/19_Residual_Hybrid_Visualizations_Colab.ipynb) | Frozen residual-hybrid performance and biological-interpretation figures | Post hoc visualization |
+| [20](experiment/notebooks/20_PLMD_Residual_Hybrid_Benchmark_Colab.ipynb) | Dataset-specific PLMD development, refit and matched testing | Separate exploratory repeat; historical results remain preserved |
+| [21](experiment/notebooks/21_CPLM4_Human_Residual_Hybrid_Benchmark_Colab.ipynb) | Dataset-specific CPLM 4.0 human benchmark | Requires authors' separate source files and checkpoint |
+| [22](experiment/notebooks/22_dbPTM_Residual_Hybrid_Benchmark_Colab.ipynb) | Dataset-specific dbPTM benchmark preflight | Blocked by missing training-site identifiers and 21-residue adapter |
+| [23](experiment/notebooks/23_hCKSAAP_Human_Residual_Hybrid_Benchmark_Colab.ipynb) | Dataset-specific hCKSAAP_UbSite human benchmark | Source data present; requires dataset-specific checkpoint |
+| [24](experiment/notebooks/24_UbiComb_Plant_Residual_Hybrid_Benchmark_Colab.ipynb) | Dataset-specific UbiComb plant benchmark | Source data present; requires dataset-specific checkpoint |
 
 Negative and stopped experiments remain versioned because they document the
 model-selection path and reduce selective reporting.
+
+### Five-benchmark extension
+
+Notebooks 20–24 implement separate training/evaluation workflows for the five
+benchmark families described in MMUbiPred Section 2.1. This extension differs
+from the earlier external-cohort evaluation: each eligible benchmark trains
+new experts and fusion weights using its own published training partition.
+No results from these new workflows have yet been obtained.
+
+The shared entry point is `experiment/scripts/run_dataset_benchmark.py`.
+Configuration files in `experiment/configs/benchmarks/` fix five protein-grouped
+outer folds, inner 90/10 grouped validation, and 15 complete epochs without
+early stopping. The Short-Range Expert uses the existing three-initialization
+stabilization rule (42, 123, 2026); the Long-Context Expert uses seed 42. This
+amounts to 15 short-range and five long-context candidate training runs per
+dataset, followed by two full-data refits. The test partition never selects
+epochs, seeds, fusion weights, or the reporting threshold of 0.5.
+
+Final refit durations are the integer medians of the selected inner-validation
+epochs. The nonnegative residual stacker is fitted to the new OOF predictions.
+Its development cross-fit is a second-level OOF diagnostic, not a fully nested
+estimate of the entire stacking procedure. All fold jobs and refits resume
+after the last completed epoch. Separate dataset directories under
+`MyDrive/MMUbiPred-research/five-benchmark-study-v1/` contain the checkpoints,
+sequence caches, optimizer states, and frozen contracts required for moving
+between Colab accounts.
+
+Source preflight verifies published filenames, input shapes, and checksums of
+the dataset-specific released baseline before expensive training. An H5 file's
+name alone is not proof of its training provenance: the non-PLMD checkpoint
+assignments follow the authors' upstream README/notebook mapping and must be
+obtained from those sources. The PLMD checkpoint additionally has the hash
+verified during the completed replication. Full source files and their hashes
+are preserved, with exclusions reported separately. Coordinates for newly
+available benchmarks are resolved from exact training-window reconstruction;
+the test partition uses that frozen rule. Both models are evaluated on the
+identical retained test sites. Report these matched-cohort results separately
+from published full-test metrics, including coverage and any protein/site/window
+overlap in the original split. Sequence identity filtering across proteins is
+not added to these published benchmark splits; grouping is by accession.
+
+The initial source audit found two unresolved prerequisites. CPLM 4.0 supplies
+four source files through the authors' separate Drive folder. The dbPTM
+`training.csv` has 517,541 peptides and labels but no protein accessions or site
+positions; it cannot support protein-grouped validation or reconstruction of
+257-residue inputs. Its upstream MMUbiPred notebook also uses 21-residue
+inputs. Notebook 22 therefore stops before training until a verified
+row-aligned training-site mapping, context sequences, the undersampling
+protocol, and a validated input adapter are implemented. It does not pad short
+peptides to manufacture the absent context.
+
+The new notebooks preserve the study's prior development history. PLMD testing
+is a repeated historical analysis. Additional benchmark comparisons report
+paired protein-cluster bootstrap intervals; these per-dataset intervals are
+unadjusted for the five-benchmark family. All outcomes and unresolved source
+limitations must be reported, and dataset-wide superiority is not inferred
+from a selectively favourable result.
 
 ## Reproducibility
 
