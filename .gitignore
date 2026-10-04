@@ -12,3 +12,6 @@ venv/
 *.py[cod]
 .DS_Store
 .env
+
+# Local staging area for large files copied to Google Drive.
+drive-upload/
