@@ -147,7 +147,7 @@ class DatasetBenchmarkTests(unittest.TestCase):
         datasets={'local':TinyDataset(),'context':TinyDataset()}
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
-            args=SimpleNamespace(run_dir=root,model_file=root/'baseline.h5')
+            args=SimpleNamespace(run_dir=root,model_file=root/'baseline.h5',folds=[0])
             atomic_json(args.model_file,{'synthetic':True})
             atomic_json(root/'protocol.json',config)
             atomic_json(root/'train_cohort.json',[{'row':i} for i in range(100)])
@@ -156,6 +156,12 @@ class DatasetBenchmarkTests(unittest.TestCase):
                  patch.object(runner,'require_gpu'), \
                  patch('ubipred.model.build_model',side_effect=lambda **kwargs:TinyModel()), \
                  contextlib.redirect_stdout(io.StringIO()):
+                runner.development(args,config)
+                self.assertTrue((root/'folds/fold_0/local/outer_predictions.npz').exists())
+                self.assertTrue((root/'folds/fold_0/context/outer_predictions.npz').exists())
+                self.assertFalse((root/'folds/fold_1/local/outer_predictions.npz').exists())
+                self.assertFalse((root/'development_summary.json').exists())
+                args.folds=None
                 runner.development(args,config)
                 summary=json.loads((root/'development_summary.json').read_text())
                 self.assertTrue(summary['comparison_valid'])

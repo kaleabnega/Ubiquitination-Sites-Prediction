@@ -2,7 +2,7 @@
 """Dataset-specific residual-hybrid development, refit, and test orchestration.
 
 Each stage has an explicit artifact contract; test stages require a completed
-frozen refit. All large computation and downloads run in Colab.
+frozen refit. GPU work runs in the selected notebook runtime.
 """
 from __future__ import annotations
 
@@ -267,7 +267,10 @@ def development(args, config):
         return
     all_probabilities = {name: np.full(len(rows), np.nan) for name in ('local', 'context')}
     selections = {'local': [], 'context': []}
+    requested_folds = getattr(args, 'folds', None)
     for fold, (outer_train, held) in enumerate(folds):
+        if requested_folds is not None and fold not in requested_folds:
+            continue
         training_records = [records[i] for i in outer_train]
         inner_train, inner_val = make_train_validation_indices(
             training_records, 0.1, config['split_seed'] + fold, 'protein_grouped')
@@ -357,6 +360,10 @@ def development(args, config):
             all_probabilities[name][held] = p
             release(model)
             del model
+    if requested_folds is not None:
+        print(f'Completed requested folds: {sorted(requested_folds)}. '
+              'Run development without --fold to assemble the OOF summary.', flush=True)
+        return
     if any(not np.isfinite(p).all() for p in all_probabilities.values()):
         raise ValueError('Incomplete OOF probability vectors')
     crossfit = np.empty(len(labels))
@@ -536,7 +543,15 @@ def main():
     parser.add_argument('--model-file',type=Path,required=True)
     parser.add_argument('--sequence-cache',type=Path)
     parser.add_argument('--allow-test',action='store_true')
+    parser.add_argument('--fold',dest='folds',type=int,action='append',
+                        help='Develop only this outer fold; repeat for multiple folds. '
+                             'A later develop call without --fold assembles all results.')
     args=parser.parse_args()
+    if args.folds is not None:
+        if args.stage != 'develop':
+            parser.error('--fold is valid only for the develop stage')
+        if len(set(args.folds)) != len(args.folds) or any(fold not in range(5) for fold in args.folds):
+            parser.error('--fold values must be distinct integers from 0 through 4')
     config=read(args.config)
     validate_protocol(config)
     args.run_dir.mkdir(parents=True,exist_ok=True)

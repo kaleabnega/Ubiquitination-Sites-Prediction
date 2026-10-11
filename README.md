@@ -131,7 +131,7 @@ and checkpoint hashes are therefore recorded explicitly.
 │   ├── audits/          Deterministic released-data audits
 │   ├── configs/         Versioned experiment configurations
 │   ├── methods/         Protocols, claim boundaries, and decision rules
-│   ├── notebooks/       Google Colab orchestration notebooks
+│   ├── notebooks/       Google Colab and Kaggle orchestration notebooks
 │   ├── outputs/         Ignored local artifacts; README retained as a marker
 │   ├── results/         Compact accepted development records
 │   ├── scripts/         Training, evaluation, retrieval, and audit entry points
@@ -173,6 +173,8 @@ outside Git. Their paths and SHA-256 hashes are recorded in manifests. The upstr
 | [22](experiment/notebooks/22_dbPTM_Residual_Hybrid_Benchmark_Colab.ipynb) | Dataset-specific dbPTM benchmark preflight | Blocked by missing training-site identifiers and 21-residue adapter |
 | [23](experiment/notebooks/23_hCKSAAP_Human_Residual_Hybrid_Benchmark_Colab.ipynb) | Dataset-specific hCKSAAP_UbSite human benchmark | Source data present; requires dataset-specific checkpoint |
 | [24](experiment/notebooks/24_UbiComb_Plant_Residual_Hybrid_Benchmark_Colab.ipynb) | Dataset-specific UbiComb plant benchmark | Source data present; requires dataset-specific checkpoint |
+| [23 Kaggle](experiment/notebooks/23_hCKSAAP_Human_Residual_Hybrid_Benchmark_Kaggle.ipynb) | hCKSAAP on Kaggle T4 x2 | Public checkpoint download and parallel development folds |
+| [24 Kaggle](experiment/notebooks/24_UbiComb_Plant_Residual_Hybrid_Benchmark_Kaggle.ipynb) | UbiComb on Kaggle T4 x2 | Public checkpoint download and parallel development folds |
 
 Negative and stopped experiments remain versioned because they document the
 model-selection path and reduce selective reporting.
@@ -254,6 +256,15 @@ Private-repository Colab access is mediated through a fine-grained read-only
 token stored as `GITHUB_TOKEN` in Colab Secrets. Protein-model downloads can
 use an optional `HF_TOKEN`. Notebook code supplies credentials through a
 temporary askpass process and does not embed them in clone URLs or Git remotes.
+
+The Kaggle editions of notebooks 23 and 24 use the same private-repository
+secret in Kaggle Secrets. Enable Internet and GPU T4 x2. They download and
+verify their dataset-specific public baseline checkpoints, run independent
+outer folds concurrently on the two GPUs, and write checkpoints to
+`/kaggle/working/mmubipred_benchmark_runs/`. Enable **Persistence → Files only**
+before training. For cross-account resumption, attach a saved run directory
+as Kaggle Input and set `RESUME_RUN_DIR` in the notebook. The final full-data
+refit uses one GPU; Kaggle session and output limits still apply.
 
 ### Environment and tests
 
