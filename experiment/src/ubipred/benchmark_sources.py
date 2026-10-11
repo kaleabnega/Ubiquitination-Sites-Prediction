@@ -11,11 +11,65 @@ import csv
 import hashlib
 import json
 import os
+import re
 import tempfile
 from collections import Counter
 from pathlib import Path
 
 from .fasta import ALPHABET_SET, iter_fasta
+
+
+UNIPROT_ACCESSION_PATTERN = re.compile(
+    r'(?:[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9](?:[A-Z][A-Z0-9]{2}[0-9]){1,2})'
+)
+PUBLISHED_ISOFORM_PATTERN = re.compile(
+    rf'(?P<canonical>{UNIPROT_ACCESSION_PATTERN.pattern})x(?P<isoform>[1-9][0-9]*)'
+)
+
+
+def published_isoform_candidate(accession):
+    """Translate a published xN suffix into a candidate UniProt isoform ID.
+
+    This is only a lookup candidate; exact site-window reconstruction must
+    validate the retrieved sequence before it enters the training cache.
+    """
+    match = PUBLISHED_ISOFORM_PATTERN.fullmatch(accession)
+    if match is None:
+        return None
+    return f"{match['canonical']}-{match['isoform']}"
+
+
+def matching_coordinate_offsets(rows, accession, sequence):
+    """Offsets supported by an exact published 49-mer at the stated site."""
+    relevant = [row for row in rows if row['accession'] == accession]
+    return [offset for offset in (0, 1) if any(
+        window(sequence, row['position'] + offset, 49) == row['window_49']
+        for row in relevant
+    )]
+
+
+def fetch_isoform_fasta(session, accession, timeout_seconds=120):
+    """Retrieve one exact UniProt isoform, never substituting its canonical entry."""
+    if not re.fullmatch(r'[A-Z0-9]+-[1-9][0-9]*', accession):
+        raise ValueError(f'Invalid UniProt isoform candidate: {accession}')
+    response = session.get(
+        f'https://rest.uniprot.org/uniprotkb/{accession}.fasta',
+        timeout=timeout_seconds,
+    )
+    provenance = {
+        key: value for key, value in response.headers.items()
+        if key.lower() in {'x-uniprot-release', 'x-uniprot-release-date'}
+    }
+    if response.status_code == 404:
+        return None, provenance
+    response.raise_for_status()
+    lines = response.text.splitlines()
+    if not lines or not lines[0].startswith((f'>sp|{accession}|', f'>tr|{accession}|')):
+        raise ValueError(f'UniProt FASTA accession differs from requested isoform: {accession}')
+    sequence = ''.join(lines[1:]).strip().upper()
+    if not sequence or not re.fullmatch(r'[A-Z]+', sequence):
+        raise ValueError(f'Invalid UniProt FASTA sequence for {accession}')
+    return sequence, provenance
 
 
 def digest(path):

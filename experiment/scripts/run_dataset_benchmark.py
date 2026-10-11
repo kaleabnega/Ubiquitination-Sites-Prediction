@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import statistics
 import subprocess
 import sys
@@ -19,7 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'experiment/src'))
 from ubipred.benchmark_sources import (  # noqa: E402
     atomic_json, coordinate_offset, digest, load_sources, object_digest,
-    overlap_report, resolve_source, validate_rows,
+    overlap_report, resolve_source, validate_rows, matching_coordinate_offsets,
+    published_isoform_candidate, UNIPROT_ACCESSION_PATTERN, fetch_isoform_fasta,
 )
 
 
@@ -154,20 +154,47 @@ def prepare(args, config, split):
         cache['sequences'].update(imported['sequences'])
         cache['imported_cache_sha256'] = digest(args.sequence_cache)
     required = sorted({r['accession'] for r in rows})
+    for accession in required:
+        if published_isoform_candidate(accession) and accession in cache['sequences']:
+            if not matching_coordinate_offsets(rows, accession, cache['sequences'][accession]):
+                raise ValueError(
+                    f'Cached isoform sequence does not reproduce a published 49-mer: {accession}'
+                )
     missing = [p for p in required if p not in cache['sequences']]
-    accession_pattern = re.compile(r'^(?:[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9](?:[A-Z][A-Z0-9]{2}[0-9]){1,2})$')
-    unsupported = [p for p in missing if not accession_pattern.fullmatch(p)]
+    ordinary = [p for p in missing if UNIPROT_ACCESSION_PATTERN.fullmatch(p)]
+    isoforms = [(p, published_isoform_candidate(p)) for p in missing
+                if published_isoform_candidate(p)]
+    unsupported = [p for p in missing if p not in ordinary and
+                   published_isoform_candidate(p) is None]
     if unsupported:
         raise ValueError(f'Accession/isoform resolution requires review: {unsupported[:10]}')
     if missing:
         from fetch_uniprot_context import fetch_batch, make_session
         session = make_session()
-        for start in range(0, len(missing), 40):
-            found, provenance = fetch_batch(session, missing[start:start+40], 120)
+        for start in range(0, len(ordinary), 40):
+            found, provenance = fetch_batch(session, ordinary[start:start+40], 120)
             cache['sequences'].update(found)
             cache['response_provenance'] = provenance
             atomic_json(cache_path, cache)
-            print(f'{split} UniProt: attempted {min(start+40, len(missing))}/{len(missing)} missing accessions', flush=True)
+            print(f'{split} UniProt canonical: attempted '
+                  f'{min(start+40, len(ordinary))}/{len(ordinary)} missing accessions', flush=True)
+        for index, (accession, candidate) in enumerate(isoforms, start=1):
+            sequence, provenance = fetch_isoform_fasta(session, candidate, 120)
+            offsets = matching_coordinate_offsets(rows, accession, sequence) if sequence else []
+            cache.setdefault('isoform_resolution', {})[accession] = {
+                'candidate': candidate,
+                'status': 'validated_candidate' if offsets else
+                          ('not_found' if sequence is None else 'published_window_mismatch'),
+                'matching_coordinate_offsets': offsets,
+                'response_provenance': provenance,
+            }
+            if offsets:
+                cache['sequences'][accession] = sequence
+            atomic_json(cache_path, cache)
+            if index % 20 == 0 or index == len(isoforms):
+                print(f'{split} UniProt isoforms: reviewed {index}/{len(isoforms)}; '
+                      f"validated {sum(x['status'] == 'validated_candidate' for x in cache['isoform_resolution'].values())}",
+                      flush=True)
     atomic_json(cache_path, cache)
     if split == 'train':
         offset, counts = coordinate_offset(rows, cache['sequences'], config['coordinate_offset'])
@@ -178,6 +205,15 @@ def prepare(args, config, split):
     report = {'preprocessing': preprocessing, 'validation': validation,
               'coordinate_offset': offset, 'training_coordinate_match_counts': counts,
               'cache_sha256': digest(cache_path), 'test_labels_used_for_selection': False}
+    if cache.get('isoform_resolution'):
+        resolutions = cache['isoform_resolution']
+        report['isoform_resolution'] = {
+            'status_counts': dict(Counter(item['status'] for item in resolutions.values())),
+            'unresolved_accessions': sorted(
+                accession for accession, item in resolutions.items()
+                if item['status'] != 'validated_candidate'
+            ),
+        }
     if split == 'test':
         report['overlap'] = overlap_report(read(args.run_dir / 'train_cohort.json'), retained)
     atomic_json(args.run_dir / f'{split}_feasibility.json', report)

@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -14,7 +14,8 @@ sys.path.insert(0,str(ROOT/'experiment/src'))
 sys.path.insert(0,str(ROOT/'experiment/scripts'))
 from ubipred.benchmark_sources import (
     atomic_json, coordinate_offset, digest, load_sources, overlap_report,
-    validate_rows, window,
+    validate_rows, window, matching_coordinate_offsets, published_isoform_candidate,
+    fetch_isoform_fasta,
 )
 from run_dataset_benchmark import bind, validate_protocol, verify_freeze
 
@@ -54,6 +55,86 @@ class DatasetBenchmarkTests(unittest.TestCase):
         changed={**row,'window_49':'G'*24+'K'+'A'*24}
         retained,report=validate_rows([changed],{'P12345':protein},1)
         self.assertEqual(report['reasons'],{'released_49mer_mismatch':1})
+
+    def test_published_isoform_candidate_requires_exact_accession_pattern(self):
+        self.assertEqual(published_isoform_candidate('O00165x2'),'O00165-2')
+        self.assertEqual(published_isoform_candidate('A0FGR8x6'),'A0FGR8-6')
+        for malformed in ('O00165-2','O00165x0','O00165x2extra','not_an_accessionx2'):
+            self.assertIsNone(published_isoform_candidate(malformed))
+
+    def test_isoform_candidate_requires_exact_published_window(self):
+        protein,row=self.row()
+        row['accession']='P12345x2'
+        self.assertEqual(matching_coordinate_offsets([row],row['accession'],protein),[1])
+        self.assertEqual(matching_coordinate_offsets([row],row['accession'],'G'*281),[])
+
+    def test_isoform_fasta_rejects_canonical_substitution(self):
+        response=SimpleNamespace(status_code=200,headers={},
+                                 text='>sp|O00165|HAX1_HUMAN\nMKK\n',
+                                 raise_for_status=lambda:None)
+        session=SimpleNamespace(get=lambda *args,**kwargs:response)
+        with self.assertRaisesRegex(ValueError,'differs from requested isoform'):
+            fetch_isoform_fasta(session,'O00165-2',120)
+        response.text='>sp|O00165-2|HAX1_HUMAN\nMKK\n'
+        self.assertEqual(fetch_isoform_fasta(session,'O00165-2',120)[0],'MKK')
+        response.status_code=404
+        self.assertIsNone(fetch_isoform_fasta(session,'O00165-2',120)[0])
+
+    def test_prepare_train_caches_only_window_validated_isoform(self):
+        import run_dataset_benchmark as runner
+        protein,row=self.row()
+        row['accession']='P12345x2'
+        other_protein='G'*140+'K'+'A'*140
+        other={'accession':'Q12345','position':140,'label':0,
+               'window_49':window(other_protein,141,49),'source_id':'example:1'}
+        source_files=[]
+        preprocessing={'source_files':source_files}
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            atomic_json(root/'protocol.json',{'source_files':{'train':source_files}})
+            args=SimpleNamespace(run_dir=root,source_dir=root,upstream_dir=root,
+                                 model_file=root/'model.h5',sequence_cache=None)
+            config={'coordinate_offset':'infer_from_training','minimum_context_coverage':0.95}
+            fake_fetch=ModuleType('fetch_uniprot_context')
+            fake_fetch.make_session=lambda:object()
+            fake_fetch.fetch_batch=lambda *args:({'Q12345':other_protein}, {})
+            with patch.object(runner,'initialize'), \
+                 patch.object(runner,'load_sources',return_value=([row,other],preprocessing)), \
+                 patch.dict(sys.modules,{'fetch_uniprot_context':fake_fetch}), \
+                 patch.object(runner,'fetch_isoform_fasta',return_value=(protein,{})) as fetch:
+                runner.prepare(args,config,'train')
+            fetch.assert_called_once()
+            self.assertEqual(fetch.call_args.args[1],'P12345-2')
+            cache=json.loads((root/'train_sequences.json').read_text())
+            self.assertEqual(cache['sequences']['P12345x2'],protein)
+            self.assertEqual(cache['isoform_resolution']['P12345x2']['matching_coordinate_offsets'],[1])
+            self.assertEqual(json.loads((root/'train_preparation.json').read_text())['validation']['coverage'],1)
+
+    def test_prepare_train_rejects_mismatched_isoform_and_records_feasibility(self):
+        import run_dataset_benchmark as runner
+        protein,row=self.row()
+        row['accession']='P12345x2'
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            atomic_json(root/'protocol.json',{'source_files':{'train':[]}})
+            args=SimpleNamespace(run_dir=root,source_dir=root,upstream_dir=root,
+                                 model_file=root/'model.h5',sequence_cache=None)
+            config={'coordinate_offset':0,'minimum_context_coverage':0.95}
+            fake_fetch=ModuleType('fetch_uniprot_context')
+            fake_fetch.make_session=lambda:object()
+            fake_fetch.fetch_batch=lambda *args:({}, {})
+            with patch.object(runner,'initialize'), \
+                 patch.object(runner,'load_sources',return_value=([row],{'source_files':[]})), \
+                 patch.dict(sys.modules,{'fetch_uniprot_context':fake_fetch}), \
+                 patch.object(runner,'fetch_isoform_fasta',return_value=('G'*281,{})):
+                with self.assertRaisesRegex(RuntimeError,'Context coverage'):
+                    runner.prepare(args,config,'train')
+            cache=json.loads((root/'train_sequences.json').read_text())
+            self.assertNotIn('P12345x2',cache['sequences'])
+            self.assertEqual(cache['isoform_resolution']['P12345x2']['status'],
+                             'published_window_mismatch')
+            report=json.loads((root/'train_feasibility.json').read_text())
+            self.assertEqual(report['isoform_resolution']['unresolved_accessions'],['P12345x2'])
 
     def test_overlap_is_reported_without_reassigning_the_published_split(self):
         protein,row=self.row()
