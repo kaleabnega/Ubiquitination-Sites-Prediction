@@ -17,7 +17,7 @@ from ubipred.benchmark_sources import (
     validate_rows, window, matching_coordinate_offsets, published_isoform_candidate,
     fetch_isoform_fasta,
 )
-from run_dataset_benchmark import bind, validate_protocol, verify_freeze
+from run_dataset_benchmark import bind, minimum_context_coverage, validate_protocol, verify_freeze
 
 
 class DatasetBenchmarkTests(unittest.TestCase):
@@ -171,6 +171,18 @@ class DatasetBenchmarkTests(unittest.TestCase):
             validate_protocol(config)
             config['epochs']=30
             with self.assertRaises(ValueError): validate_protocol(config)
+
+    def test_hcksaap_verified_context_amendment_keeps_train_and_test_rules_explicit(self):
+        original=json.loads((ROOT/'experiment/configs/benchmarks/hcksaap_residual_v1.json').read_text())
+        amended=json.loads((ROOT/'experiment/configs/benchmarks/hcksaap_residual_verified_v2.json').read_text())
+        self.assertEqual(minimum_context_coverage(original,'train'),0.95)
+        self.assertEqual(minimum_context_coverage(original,'test'),0.95)
+        self.assertEqual(minimum_context_coverage(amended,'train'),0.9)
+        self.assertEqual(minimum_context_coverage(amended,'test'),0.0)
+        self.assertEqual(amended['cohort_amendment']['observed_training_support']['total'],10996)
+        amended['minimum_context_coverage']=0.8
+        with self.assertRaisesRegex(ValueError,'amendment'):
+            validate_protocol(amended)
 
     def test_test_stage_requires_intact_frozen_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:

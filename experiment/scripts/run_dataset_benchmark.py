@@ -125,6 +125,17 @@ def validate_protocol(config):
     for name in ('local', 'context'):
         if config[f'{name}_expert']['inner_validation_fraction'] != 0.1:
             raise ValueError('Inner validation fraction must remain 0.1')
+    if config.get('cohort_amendment'):
+        if config['benchmark'] != 'hcksaap' or config['minimum_context_coverage'] != 0.9:
+            raise ValueError('The verified-context cohort amendment applies only to hCKSAAP training')
+        if config.get('minimum_test_context_coverage') != 0.0:
+            raise ValueError('The amended hCKSAAP test policy must report coverage without selection')
+
+
+def minimum_context_coverage(config, split):
+    if split == 'test':
+        return config.get('minimum_test_context_coverage', config['minimum_context_coverage'])
+    return config['minimum_context_coverage']
 
 
 def prepare(args, config, split):
@@ -214,11 +225,19 @@ def prepare(args, config, split):
                 if item['status'] != 'validated_candidate'
             ),
         }
+    minimum_coverage = minimum_context_coverage(config, split)
+    report['coverage_policy'] = {
+        'minimum': minimum_coverage,
+        'passed': validation['coverage'] >= minimum_coverage,
+        'matched_cohort_only': bool(config.get('cohort_amendment')),
+    }
     if split == 'test':
         report['overlap'] = overlap_report(read(args.run_dir / 'train_cohort.json'), retained)
     atomic_json(args.run_dir / f'{split}_feasibility.json', report)
-    if validation['coverage'] < config['minimum_context_coverage']:
-        raise RuntimeError(f'Context coverage {validation["coverage"]:.4f} below protocol minimum; see {split}_feasibility.json')
+    if not report['coverage_policy']['passed']:
+        raise RuntimeError(f'Context coverage {validation["coverage"]:.4f} below '
+                           f'{split} protocol minimum {minimum_coverage:.4f}; '
+                           f'see {split}_feasibility.json')
     if set(r['label'] for r in retained) != {0, 1}:
         raise ValueError('Both classes must survive preprocessing')
     atomic_json(output, retained)
@@ -561,6 +580,9 @@ def evaluate(args, config):
         'comparison':'dataset-specific released checkpoint versus separately trained residual hybrid',
         'cohort':'identical context-valid published test rows', 'metrics':metrics,
         'paired_hybrid_vs_paper':paired,'test_preparation':read(args.run_dir/'test_preparation.json'),
+        'training_context_coverage':read(args.run_dir/'train_preparation.json')['validation']['coverage'],
+        'test_context_coverage':read(args.run_dir/'test_preparation.json')['validation']['coverage'],
+        'cohort_amendment':config.get('cohort_amendment'),
         'model_lock_sha256':digest(args.run_dir/'model_lock.json'),
         'five_benchmark_multiplicity':'Report all five; no study-wide superiority claim from unadjusted per-dataset intervals'}
     np.savez_compressed(args.run_dir/'test_predictions.npz',labels=labels,
