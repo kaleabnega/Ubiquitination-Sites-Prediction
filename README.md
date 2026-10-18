@@ -175,6 +175,7 @@ outside Git. Their paths and SHA-256 hashes are recorded in manifests. The upstr
 | [24](experiment/notebooks/24_UbiComb_Plant_Residual_Hybrid_Benchmark_Colab.ipynb) | Dataset-specific UbiComb plant benchmark | Source data present; requires dataset-specific checkpoint |
 | [23 Kaggle](experiment/notebooks/23_hCKSAAP_Human_Residual_Hybrid_Benchmark_Kaggle.ipynb) | hCKSAAP on Kaggle T4 x2 | Public checkpoint download and parallel development folds |
 | [24 Kaggle](experiment/notebooks/24_UbiComb_Plant_Residual_Hybrid_Benchmark_Kaggle.ipynb) | UbiComb on Kaggle T4 x2 | Public checkpoint download and parallel development folds |
+| [25 Kaggle](experiment/notebooks/25_Anchored_Context_Correction_Development_Kaggle.ipynb) | Baseline-anchored context-correction screen | Development only; requires completed notebook-23 or notebook-24 Output |
 
 Negative and stopped experiments remain versioned because they document the
 model-selection path and reduce selective reporting.

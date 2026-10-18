@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "experiment_name": "anchored_context_correction_screen_v1",
+  "supported_benchmarks": ["hcksaap", "ubicomb"],
+  "analysis_role": "post-historical-test development-only architecture screen",
+  "outer_folds": 5,
+  "initialization_seeds": [42, 123, 2026],
+  "epochs_per_seed": 15,
+  "inner_validation_fraction": 0.1,
+  "batch_size": 32,
+  "optimizer": "Adam",
+  "learning_rate": 0.001,
+  "optimizer_epsilon": 1e-7,
+  "checkpoint_selection": "maximum inner MCC at fixed 0.5; ties by AUPRC, earliest epoch, smallest seed",
+  "correction": {
+    "form": "logit(p_exact_anchor) + intercept + nonnegative_weight * clip(logit(p_context)-logit(p_exact_anchor),-4,4)/4",
+    "intercept_bounds": [-0.5, 0.5],
+    "context_weight_bounds": [0.0, 1.0],
+    "l2_strength": 0.1,
+    "primary_threshold": 0.5
+  },
+  "advance_rule": {
+    "minimum_oof_mcc_gain_over_anchor": 0.01,
+    "minimum_oof_mcc_gain_over_intercept_only": 0.005,
+    "minimum_positive_fold_count": 4,
+    "maximum_auroc_decrease": 0.005,
+    "maximum_sensitivity_decrease": 0.02,
+    "maximum_specificity_decrease": 0.02
+  },
+  "released_test_access": "forbidden"
+}
